@@ -21,13 +21,17 @@ const FOOTER_LEN: usize = SALT_LEN + 32 + 8;
 
 /// Append encrypted envelope + keyed locator footer after cover bytes.
 pub fn embed(cover: &[u8], ciphertext: &[u8], password: &str) -> StegoResult<Vec<u8>> {
-    if ciphertext.len() < 1 + SALT_LEN {
-        return Err(StegoError::InvalidFormat("ciphertext too short".into()));
-    }
-    // Envelope already contains its own salt at bytes [1..17]; reuse for footer
-    // so extract can derive LocatorKey before decrypting.
-    let salt = &ciphertext[1..1 + SALT_LEN];
-    let keys = crypto::derive_keys(password, salt)?;
+    embed_with(cover, ciphertext, password, &crypto::CryptoOptions::default())
+}
+
+pub fn embed_with(
+    cover: &[u8],
+    ciphertext: &[u8],
+    password: &str,
+    opts: &crypto::CryptoOptions,
+) -> StegoResult<Vec<u8>> {
+    let salt = crypto::salt_from_envelope(ciphertext)?;
+    let keys = crypto::derive_keys_with(password, &salt, opts)?;
 
     let mut mac = HmacSha256::new_from_slice(&keys.locator_key)
         .map_err(|e| StegoError::Message(format!("hmac key: {e}")))?;
@@ -37,7 +41,7 @@ pub fn embed(cover: &[u8], ciphertext: &[u8], password: &str) -> StegoResult<Vec
     let mut out = Vec::with_capacity(cover.len() + ciphertext.len() + FOOTER_LEN);
     out.extend_from_slice(cover);
     out.extend_from_slice(ciphertext);
-    out.extend_from_slice(salt);
+    out.extend_from_slice(&salt);
     out.extend_from_slice(&tag);
     out.extend_from_slice(&(ciphertext.len() as u64).to_le_bytes());
     Ok(out)
@@ -45,6 +49,14 @@ pub fn embed(cover: &[u8], ciphertext: &[u8], password: &str) -> StegoResult<Vec
 
 /// Locate and return the encrypted envelope from a Method B stego file.
 pub fn extract(stego: &[u8], password: &str) -> StegoResult<Vec<u8>> {
+    extract_with(stego, password, &crypto::CryptoOptions::default())
+}
+
+pub fn extract_with(
+    stego: &[u8],
+    password: &str,
+    opts: &crypto::CryptoOptions,
+) -> StegoResult<Vec<u8>> {
     if stego.len() < FOOTER_LEN + 1 {
         return Err(StegoError::InvalidFormat(
             "file too short for EOF footer".into(),
@@ -63,20 +75,42 @@ pub fn extract(stego: &[u8], password: &str) -> StegoResult<Vec<u8>> {
     let salt = &stego[footer_start..footer_start + SALT_LEN];
     let tag = &stego[footer_start + SALT_LEN..footer_start + SALT_LEN + 32];
 
-    // Envelope salt must match footer salt (same encryption).
-    if envelope.len() < 1 + SALT_LEN || &envelope[1..1 + SALT_LEN] != salt {
+    let header = crypto::parse_envelope_header(envelope).map_err(|_| StegoError::WrongPassword)?;
+    if header.salt.as_slice() != salt {
         return Err(StegoError::WrongPassword);
     }
 
-    let keys = crypto::derive_keys(password, salt)?;
+    // Prefer profile from envelope; fall back to trying known profiles if HMAC fails
+    // (should not happen when envelope is intact).
+    let mut try_opts = opts.clone();
+    try_opts.profile = header.profile;
+    if verify_hmac(envelope, tag, password, &try_opts).is_ok() {
+        return Ok(envelope.to_vec());
+    }
+
+    for profile in crypto::KdfProfile::all() {
+        try_opts.profile = profile;
+        if verify_hmac(envelope, tag, password, &try_opts).is_ok() {
+            return Ok(envelope.to_vec());
+        }
+    }
+    Err(StegoError::WrongPassword)
+}
+
+fn verify_hmac(
+    envelope: &[u8],
+    tag: &[u8],
+    password: &str,
+    opts: &crypto::CryptoOptions,
+) -> StegoResult<()> {
+    let salt = crypto::salt_from_envelope(envelope)?;
+    let keys = crypto::derive_keys_with(password, &salt, opts)?;
     let mut mac = HmacSha256::new_from_slice(&keys.locator_key)
         .map_err(|e| StegoError::Message(format!("hmac key: {e}")))?;
     mac.update(envelope);
-    if mac.verify_slice(tag).is_err() {
-        return Err(StegoError::WrongPassword);
-    }
-
-    Ok(envelope.to_vec())
+    mac.verify_slice(tag)
+        .map_err(|_| StegoError::WrongPassword)?;
+    Ok(())
 }
 
 /// Original cover length if footer parses (does not verify password).
