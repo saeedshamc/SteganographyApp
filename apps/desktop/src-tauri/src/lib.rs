@@ -128,6 +128,7 @@ fn build_opts(
     profile: String,
     keyfile_path: Option<String>,
     adaptive_lsb: bool,
+    lsb_depth: u8,
 ) -> Result<StegoOptions, String> {
     let profile = parse_kdf_profile(&profile).map_err(|e| e.to_string())?;
     let keyfile = match keyfile_path {
@@ -138,6 +139,7 @@ fn build_opts(
     Ok(StegoOptions {
         crypto: CryptoOptions { profile, keyfile },
         adaptive_lsb,
+        lsb_depth,
     })
 }
 
@@ -151,12 +153,13 @@ fn hide_payload(
     profile: String,
     keyfile_path: Option<String>,
     adaptive_lsb: bool,
+    lsb_depth: u8,
 ) -> Result<HideResultDto, String> {
     if password.is_empty() {
         return Err("password is required".into());
     }
     let cover = fs::read(&cover_path).map_err(|e| e.to_string())?;
-    let opts = build_opts(profile, keyfile_path, adaptive_lsb)?;
+    let opts = build_opts(profile, keyfile_path, adaptive_lsb, lsb_depth)?;
 
     let (meta, payload_bytes) = if let Some(text) = text_payload {
         let data = text.into_bytes();
@@ -223,12 +226,13 @@ fn extract_payload(
     password: String,
     keyfile_path: Option<String>,
     adaptive_lsb: bool,
+    lsb_depth: u8,
 ) -> Result<ExtractResultDto, String> {
     if password.is_empty() {
         return Err("password is required".into());
     }
     let stego = fs::read(&stego_path).map_err(|e| e.to_string())?;
-    let opts = build_opts("balanced".into(), keyfile_path, adaptive_lsb)?;
+    let opts = build_opts("balanced".into(), keyfile_path, adaptive_lsb, lsb_depth)?;
     let recovered =
         extract_with(&stego, &stego_path, &password, &opts).map_err(|e| e.to_string())?;
     let kind = recovered.meta.kind().as_str().to_string();
@@ -295,6 +299,61 @@ fn run_extracted(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Educational LSB lab: compare sequential vs keyed bit placement on a synthetic buffer.
+#[tauri::command]
+fn lab_lsb_demo() -> Result<String, String> {
+    let mut cover = vec![0u8; 256];
+    for (i, b) in cover.iter_mut().enumerate() {
+        *b = (i as u8).wrapping_mul(17);
+    }
+    let payload = b"LAB!";
+    let mut seq = cover.clone();
+    for (i, bit) in payload
+        .iter()
+        .flat_map(|b| (0..8).map(move |k| (b >> k) & 1))
+        .enumerate()
+    {
+        if i < seq.len() {
+            seq[i] = (seq[i] & 0xFE) | bit;
+        }
+    }
+    let mut keyed = cover.clone();
+    let mut order: Vec<usize> = (0..keyed.len()).collect();
+    for i in (1..order.len()).rev() {
+        let j = (i * 7 + 3) % (i + 1);
+        order.swap(i, j);
+    }
+    for (i, bit) in payload
+        .iter()
+        .flat_map(|b| (0..8).map(move |k| (b >> k) & 1))
+        .enumerate()
+    {
+        if i < order.len() {
+            let idx = order[i];
+            keyed[idx] = (keyed[idx] & 0xFE) | bit;
+        }
+    }
+    let hist = |buf: &[u8]| -> (usize, usize) {
+        let ones = buf.iter().map(|b| (b & 1) as usize).sum::<usize>();
+        (buf.len() - ones, ones)
+    };
+    let (c0, c1) = hist(&cover);
+    let (s0, s1) = hist(&seq);
+    let (k0, k1) = hist(&keyed);
+    Ok(format!(
+        "LSB histogram (zeros, ones) on 256 sample bytes\n\
+         cover:      ({c0}, {c1})\n\
+         sequential: ({s0}, {s1})  <- early bytes absorb payload\n\
+         keyed-ish:  ({k0}, {k1})  <- bits spread across buffer\n\n\
+         Open Stego Method A uses password-keyed shuffle (ChaCha), not sequential order."
+    ))
+}
+
+#[tauri::command]
+fn open_path(path: String) -> Result<(), String> {
+    open::that(&path).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -309,6 +368,8 @@ pub fn run() {
             pick_stego_file,
             extract_payload,
             run_extracted,
+            lab_lsb_demo,
+            open_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

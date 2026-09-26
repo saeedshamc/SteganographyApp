@@ -20,3 +20,4 @@ tauri-plugin-opener = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 rfd = "0.15"
+open = "5"

@@ -86,9 +86,16 @@ body {
   padding-left: 1.25rem;
 }
 
-.demo-steps li {
-  margin-bottom: 0.75rem;
+.drop-zone {
+  border: 1px dashed var(--line);
+  padding: 0.75rem;
 }
+
+.drop-zone.dragover {
+  border-color: var(--accent);
+  background: var(--bg-accent);
+}
+
 
 .tab.active {
   border-color: var(--accent);

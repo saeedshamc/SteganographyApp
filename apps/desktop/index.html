@@ -25,13 +25,15 @@
         <button type="button" class="tab" data-tab="extract">Extract</button>
         <button type="button" class="tab" data-tab="demo">Demo</button>
         <button type="button" class="tab" data-tab="about">About</button>
+        <button type="button" class="tab" data-tab="lab">Lab</button>
       </nav>
 
       <section id="panel-hide" class="panel">
         <h2>Hide</h2>
 
-        <div class="field">
+        <div class="field drop-zone" id="drop-cover" data-drop="cover">
           <button type="button" id="btn-cover">Choose cover file</button>
+          <p class="muted">or drop a cover here</p>
           <p id="cover-path" class="muted">No cover selected</p>
         </div>
 
@@ -90,6 +92,14 @@
           Adaptive LSB (high-variance pixels; lower capacity)
         </label>
 
+        <div class="field">
+          <label for="lsb-depth">LSB depth</label>
+          <select id="lsb-depth">
+            <option value="1" selected>1 (default)</option>
+            <option value="2">2 (more capacity, noisier)</option>
+          </select>
+        </div>
+
         <label class="toggle-row">
           <input type="checkbox" id="verify-roundtrip" checked />
           Verify round-trip before saving
@@ -97,6 +107,7 @@
 
         <div class="actions">
           <button type="button" id="btn-hide" class="primary" disabled>Hide &amp; save</button>
+          <button type="button" id="btn-reveal-cover" disabled>Open cover in system viewer</button>
         </div>
         <p id="hide-status" class="status"></p>
       </section>
@@ -178,6 +189,29 @@
           <li>Argon2id profiles + optional keyfile; AES-256-GCM</li>
         </ul>
         <p class="muted">See <code>docs/THREAT_MODEL.md</code> and <code>docs/LEARNING.md</code> in the repo.</p>
+        <div id="wizard-box" class="info">
+          <p><strong>First-run tip:</strong> start on Demo, hide <code>test-fixtures/demo/demo-hello.bat</code>, open the cover in a normal viewer, then Extract here.</p>
+          <button type="button" id="btn-dismiss-wizard">Got it</button>
+        </div>
+      </section>
+
+      <section id="panel-lab" class="panel hidden">
+        <h2>Lab — sequential vs keyed LSB</h2>
+        <p class="muted">
+          Educational demo: sequential LSB is easy to spot in a simple histogram of LSB bits;
+          keyed shuffle spreads changes. Open Stego uses keyed LSB.
+        </p>
+        <div class="field">
+          <button type="button" id="btn-lab-run">Run tiny LSB lab on sample pattern</button>
+        </div>
+        <pre id="lab-out" class="text-out hidden"></pre>
+        <div class="info">
+          <p><strong>Why don't Photos/Acrobat run the payload?</strong></p>
+          <p class="muted">
+            They only interpret their own format. Stego bytes stay opaque until Open Stego decrypts them with your password.
+          </p>
+        </div>
+        <p class="muted">Challenges: <code>test-fixtures/challenges/</code> · Docs: FORMAT / CRYPTO / LEARNING</p>
       </section>
     </main>
   </body>

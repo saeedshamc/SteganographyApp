@@ -75,6 +75,8 @@ function updateHideEnabled() {
       ? Boolean(payloadPath)
       : Boolean(($("payload-text") as HTMLTextAreaElement | null)?.value.trim());
   btn.disabled = !coverPath || !hasPayload || pw.length === 0;
+  const reveal = $("btn-reveal-cover") as HTMLButtonElement | null;
+  if (reveal) reveal.disabled = !coverPath;
 }
 
 function updateExtractEnabled() {
@@ -98,6 +100,7 @@ function switchTab(tab: string) {
   $("panel-extract")?.classList.toggle("hidden", tab !== "extract");
   $("panel-demo")?.classList.toggle("hidden", tab !== "demo");
   $("panel-about")?.classList.toggle("hidden", tab !== "about");
+  $("panel-lab")?.classList.toggle("hidden", tab !== "lab");
 }
 
 function hideRunBox() {
@@ -181,6 +184,7 @@ async function onHide() {
       profile: ($("kdf-profile") as HTMLSelectElement).value,
       keyfilePath,
       adaptiveLsb: ($("adaptive-lsb") as HTMLInputElement).checked,
+      lsbDepth: Number(($("lsb-depth") as HTMLSelectElement | null)?.value ?? "1"),
     });
     setHideStatus(
       `Saved ${result.outputPath} (${formatBytes(result.outputSize)}, .${result.extension})`,
@@ -216,6 +220,7 @@ async function onExtract() {
       password: ($("extract-password") as HTMLInputElement).value,
       keyfilePath: extractKeyfilePath,
       adaptiveLsb: ($("extract-adaptive-lsb") as HTMLInputElement).checked,
+      lsbDepth: 1,
     });
     if (result.isText && result.textPreview != null) {
       const pre = $("extract-text")!;
@@ -302,11 +307,68 @@ window.addEventListener("DOMContentLoaded", () => {
   $("password")?.addEventListener("input", onPasswordInput);
   $("payload-text")?.addEventListener("input", updateHideEnabled);
   $("btn-hide")?.addEventListener("click", onHide);
+  $("btn-reveal-cover")?.addEventListener("click", async () => {
+    if (!coverPath) return;
+    try {
+      await invoke("open_path", { path: coverPath });
+    } catch (e) {
+      setHideStatus(String(e), true);
+    }
+  });
 
   $("btn-stego")?.addEventListener("click", onPickStego);
   $("extract-password")?.addEventListener("input", updateExtractEnabled);
   $("btn-extract")?.addEventListener("click", onExtract);
   $("btn-run")?.addEventListener("click", onRun);
+  $("btn-lab-run")?.addEventListener("click", async () => {
+    try {
+      const text = await invoke<string>("lab_lsb_demo");
+      const pre = $("lab-out")!;
+      pre.textContent = text;
+      pre.classList.remove("hidden");
+    } catch (e) {
+      setExtractStatus(String(e), true);
+    }
+  });
+  $("btn-dismiss-wizard")?.addEventListener("click", () => {
+    localStorage.setItem("openstego_wizard_done", "1");
+    $("wizard-box")?.classList.add("hidden");
+  });
+  if (localStorage.getItem("openstego_wizard_done") === "1") {
+    $("wizard-box")?.classList.add("hidden");
+  }
+
+  // Recent path history (no passwords).
+  const histKey = "openstego_recent";
+  const pushHist = (p: string) => {
+    const arr: string[] = JSON.parse(localStorage.getItem(histKey) || "[]");
+    const next = [p, ...arr.filter((x) => x !== p)].slice(0, 8);
+    localStorage.setItem(histKey, JSON.stringify(next));
+  };
+  const origPickCover = onPickCover;
+  // Wrap status updates to record history when paths change via existing handlers.
+  const coverEl = $("cover-path");
+  const obs = new MutationObserver(() => {
+    const t = coverEl?.textContent ?? "";
+    if (t && !t.startsWith("No cover")) pushHist(t.split(" (")[0]!);
+  });
+  if (coverEl) obs.observe(coverEl, { childList: true, characterData: true, subtree: true });
+
+  document.querySelectorAll(".drop-zone").forEach((zone) => {
+    zone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      zone.classList.add("dragover");
+    });
+    zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      zone.classList.remove("dragover");
+      setHideStatus(
+        "Drag-and-drop of OS paths needs the native file dialog in this build — use Choose cover / payload.",
+      );
+      void origPickCover;
+    });
+  });
 
   refreshModeUi();
 });
