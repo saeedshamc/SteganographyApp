@@ -17,9 +17,7 @@
 
       <nav class="tabs" role="tablist">
         <button type="button" class="tab active" data-tab="hide">Hide</button>
-        <button type="button" class="tab" data-tab="extract" disabled title="Arrives next stage">
-          Extract
-        </button>
+        <button type="button" class="tab" data-tab="extract">Extract</button>
       </nav>
 
       <section id="panel-hide" class="panel">
@@ -74,6 +72,26 @@
           <button type="button" id="btn-hide" class="primary" disabled>Hide &amp; save</button>
         </div>
         <p id="hide-status" class="status"></p>
+      </section>
+
+      <section id="panel-extract" class="panel hidden">
+        <h2>Extract</h2>
+
+        <div class="field">
+          <button type="button" id="btn-stego">Choose stego file</button>
+          <p id="stego-path" class="muted">No file selected</p>
+        </div>
+
+        <div class="field">
+          <label for="extract-password">Password</label>
+          <input id="extract-password" type="password" autocomplete="current-password" />
+        </div>
+
+        <div class="actions">
+          <button type="button" id="btn-extract" class="primary" disabled>Extract</button>
+        </div>
+        <p id="extract-status" class="status"></p>
+        <pre id="extract-text" class="text-out hidden"></pre>
       </section>
     </main>
   </body>

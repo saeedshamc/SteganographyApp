@@ -1,7 +1,7 @@
 //! Tauri desktop shell for Open Stego.
 
 use serde::Serialize;
-use stego_core::{hide, plan_hide, PayloadMeta, VERSION};
+use stego_core::{extract, hide, plan_hide, PayloadMeta, VERSION};
 use std::fs;
 use std::path::PathBuf;
 
@@ -22,6 +22,18 @@ struct HideResultDto {
     output_path: String,
     output_size: usize,
     extension: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExtractResultDto {
+    is_text: bool,
+    filename: Option<String>,
+    method: String,
+    size: usize,
+    /// UTF-8 text when is_text; otherwise empty (file was saved or offered).
+    text_preview: Option<String>,
+    saved_path: Option<String>,
 }
 
 #[tauri::command]
@@ -145,6 +157,60 @@ fn hide_payload(
     })
 }
 
+#[tauri::command]
+fn pick_stego_file() -> Result<(String, usize), String> {
+    let path = rfd::FileDialog::new()
+        .set_title("Choose file that may contain hidden data")
+        .pick_file()
+        .ok_or_else(|| "cancelled".to_string())?;
+    let meta = fs::metadata(&path).map_err(|e| e.to_string())?;
+    Ok((path.to_string_lossy().to_string(), meta.len() as usize))
+}
+
+#[tauri::command]
+fn extract_payload(stego_path: String, password: String) -> Result<ExtractResultDto, String> {
+    if password.is_empty() {
+        return Err("password is required".into());
+    }
+    let stego = fs::read(&stego_path).map_err(|e| e.to_string())?;
+    let recovered = extract(&stego, &stego_path, &password).map_err(|e| e.to_string())?;
+
+    if recovered.meta.is_text {
+        let text = String::from_utf8(recovered.data).map_err(|_| {
+            "hidden payload was marked as text but is not valid UTF-8".to_string()
+        })?;
+        return Ok(ExtractResultDto {
+            is_text: true,
+            filename: None,
+            method: recovered.method.as_str().to_string(),
+            size: text.len(),
+            text_preview: Some(text),
+            saved_path: None,
+        });
+    }
+
+    let suggested = recovered
+        .meta
+        .filename
+        .clone()
+        .unwrap_or_else(|| "recovered.bin".into());
+    let out = rfd::FileDialog::new()
+        .set_title("Save recovered file")
+        .set_file_name(&suggested)
+        .save_file()
+        .ok_or_else(|| "cancelled".to_string())?;
+    fs::write(&out, &recovered.data).map_err(|e| e.to_string())?;
+
+    Ok(ExtractResultDto {
+        is_text: false,
+        filename: recovered.meta.filename,
+        method: recovered.method.as_str().to_string(),
+        size: recovered.data.len(),
+        text_preview: None,
+        saved_path: Some(out.to_string_lossy().to_string()),
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -155,6 +221,8 @@ pub fn run() {
             pick_cover,
             pick_payload_file,
             hide_payload,
+            pick_stego_file,
+            extract_payload,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
