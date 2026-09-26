@@ -5,9 +5,9 @@
 - Embed into least-significant bits of pixel channels
 - Bit/pixel order is a password-derived permutation (not sequential)
 - Optional **adaptive** mode prefers high-variance pixels (lower capacity)
-- **LSB depth** 1 (default) or 2 (educational denser capacity estimate; noisier) with capacity-risk warnings
+- **LSB depth** `1` (default) or `2` is applied for real in embed/extract (not only the capacity meter). Depth 2 uses the two lowest bits per RGB channel. Extract tries the requested depth first, then the other, and also toggles adaptive — similar to KDF profile fallback.
 - Output always **PNG** (lossless). JPEG covers are rejected or converted with a clear warning
-- Capacity is finite and shown to the user
+- Capacity is finite, scales with depth, and is shown to the user
 - Implemented in `stego_core::embedding::method_a_lsb`
 
 ## Method B — keyed EOF append (everything else)

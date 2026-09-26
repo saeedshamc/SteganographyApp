@@ -59,13 +59,9 @@ pub fn plan_hide_with(
                 .map_err(|e| StegoError::UnsupportedCover(format!("cannot decode image: {e}")))?;
             let (w, h) = img.dimensions();
             let depth = format_aware::normalize_lsb_depth(opts.lsb_depth)?;
-            let mut capacity = method_a_lsb::capacity_bytes(w, h)?;
+            let mut capacity = method_a_lsb::capacity_bytes_depth(w, h, depth)?;
             if opts.adaptive_lsb {
                 capacity /= 2;
-            }
-            // Depth 2 roughly doubles usable channel bits (educational approximation).
-            if depth == 2 {
-                capacity = capacity.saturating_mul(2);
             }
             let capacity_risk = payload_len.and_then(|n| {
                 // Envelope is larger than raw payload; approximate with +96 bytes overhead.
@@ -141,11 +137,14 @@ pub fn hide_with(
                     });
                 }
             }
-            let png = if opts.adaptive_lsb {
-                method_a_lsb::embed_adaptive(cover, &envelope, password, &opts.crypto)?
-            } else {
-                method_a_lsb::embed_with(cover, &envelope, password, &opts.crypto)?
-            };
+            let png = method_a_lsb::embed_ex(
+                cover,
+                &envelope,
+                password,
+                &opts.crypto,
+                opts.lsb_depth,
+                opts.adaptive_lsb,
+            )?;
             Ok((png, "png".into()))
         }
         EmbeddingMethod::Eof => {
@@ -186,13 +185,13 @@ pub fn extract_with(
     let keyfile = opts.crypto.keyfile.as_deref();
 
     let try_lsb = || -> StegoResult<ExtractedPayload> {
-        let envelope = if opts.adaptive_lsb {
-            method_a_lsb::extract_adaptive(stego, password, &opts.crypto)
-                .or_else(|_| method_a_lsb::extract_with(stego, password, &opts.crypto))?
-        } else {
-            method_a_lsb::extract_with(stego, password, &opts.crypto)
-                .or_else(|_| method_a_lsb::extract_adaptive(stego, password, &opts.crypto))?
-        };
+        let envelope = method_a_lsb::extract_ex(
+            stego,
+            password,
+            &opts.crypto,
+            opts.lsb_depth,
+            opts.adaptive_lsb,
+        )?;
         let plain = decrypt_blob_with(&envelope, password, keyfile)?;
         let (meta, data) = unwrap_payload(&plain)?;
         Ok(ExtractedPayload {
