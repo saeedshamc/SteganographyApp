@@ -13,8 +13,12 @@ pub mod detection;
 pub mod embedding;
 pub mod error;
 pub mod metadata;
+pub mod ops;
 
+pub use detection::EmbeddingMethod;
 pub use error::{StegoError, StegoResult};
+pub use metadata::PayloadMeta;
+pub use ops::{extract, hide, plan_hide, ExtractedPayload, HidePlan};
 
 /// Library version string for CLI/GUI about screens.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
