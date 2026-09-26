@@ -23,6 +23,8 @@
       <nav class="tabs" role="tablist">
         <button type="button" class="tab active" data-tab="hide">Hide</button>
         <button type="button" class="tab" data-tab="extract">Extract</button>
+        <button type="button" class="tab" data-tab="demo">Demo</button>
+        <button type="button" class="tab" data-tab="about">About</button>
       </nav>
 
       <section id="panel-hide" class="panel">
@@ -44,7 +46,7 @@
         <div class="field">
           <label class="toggle-row">
             <input type="radio" name="payload-mode" value="file" checked />
-            Payload file
+            Payload file (programs auto-tagged by extension)
           </label>
           <label class="toggle-row">
             <input type="radio" name="payload-mode" value="text" />
@@ -55,6 +57,7 @@
         <div id="payload-file-box" class="field">
           <button type="button" id="btn-payload">Choose payload file</button>
           <p id="payload-path" class="muted">No payload selected</p>
+          <p id="payload-kind-hint" class="muted hidden"></p>
         </div>
 
         <div id="payload-text-box" class="field hidden">
@@ -67,6 +70,25 @@
           <p id="pw-strength" class="strength">Strength: —</p>
           <p class="muted">Weak passwords are allowed but warned — they are easy to brute-force.</p>
         </div>
+
+        <div class="field">
+          <label for="kdf-profile">KDF profile</label>
+          <select id="kdf-profile">
+            <option value="fast">Fast</option>
+            <option value="balanced" selected>Balanced (default)</option>
+            <option value="paranoid">Paranoid</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <button type="button" id="btn-keyfile">Optional keyfile…</button>
+          <p id="keyfile-path" class="muted">No keyfile</p>
+        </div>
+
+        <label class="toggle-row">
+          <input type="checkbox" id="adaptive-lsb" />
+          Adaptive LSB (high-variance pixels; lower capacity)
+        </label>
 
         <label class="toggle-row">
           <input type="checkbox" id="verify-roundtrip" checked />
@@ -92,11 +114,70 @@
           <input id="extract-password" type="password" autocomplete="current-password" />
         </div>
 
+        <div class="field">
+          <button type="button" id="btn-extract-keyfile">Keyfile (if used at hide)…</button>
+          <p id="extract-keyfile-path" class="muted">No keyfile</p>
+        </div>
+
+        <label class="toggle-row">
+          <input type="checkbox" id="extract-adaptive-lsb" />
+          Try adaptive LSB first
+        </label>
+
         <div class="actions">
           <button type="button" id="btn-extract" class="primary" disabled>Extract</button>
         </div>
         <p id="extract-status" class="status"></p>
         <pre id="extract-text" class="text-out hidden"></pre>
+
+        <div id="run-box" class="info hidden">
+          <p>
+            <strong>Executable payload</strong> —
+            <span id="run-meta"></span>
+          </p>
+          <p class="muted">
+            Saved to disk. Opening the cover in Photos/Acrobat does <em>not</em> run this.
+            Run only if you trust the source (transparent demo).
+          </p>
+          <div class="actions">
+            <button type="button" id="btn-run" class="primary">Run recovered file…</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-demo" class="panel hidden">
+        <h2>Demo — how it works</h2>
+        <ol class="demo-steps">
+          <li>
+            <strong>Hide</strong> a small demo script (see <code>test-fixtures/demo/</code>) inside a PNG or PDF with a password.
+          </li>
+          <li>
+            <strong>Open the cover</strong> in your normal viewer — it still looks like a normal image/PDF. Stego data is not executed there.
+          </li>
+          <li>
+            Come back to the <strong>Extract</strong> tab, enter the password, and recover the file.
+          </li>
+          <li>
+            If the payload is a program/script, you may <strong>Run</strong> it here after an explicit confirm — so everyone can see each step.
+          </li>
+        </ol>
+        <p class="muted">
+          Open Stego is open-source and educational: the path is visible on purpose. There is no silent auto-run when you double-click a cover in the OS.
+        </p>
+      </section>
+
+      <section id="panel-about" class="panel hidden">
+        <h2>About</h2>
+        <p>
+          Open Stego hides <strong>encrypted</strong> payloads in everyday files so you can study how steganography works —
+          same format on CLI and GUI (<code>docs/FORMAT.md</code>).
+        </p>
+        <ul class="demo-steps">
+          <li>Method A: keyed LSB in PNG/BMP</li>
+          <li>Method B: keyed EOF append for other covers</li>
+          <li>Argon2id profiles + optional keyfile; AES-256-GCM</li>
+        </ul>
+        <p class="muted">See <code>docs/THREAT_MODEL.md</code> and <code>docs/LEARNING.md</code> in the repo.</p>
       </section>
     </main>
   </body>

@@ -17,9 +17,11 @@ type HideResultDto = {
 
 type ExtractResultDto = {
   isText: boolean;
+  kind: string;
   filename: string | null;
   method: string;
   size: number;
+  checksumHex: string;
   textPreview: string | null;
   savedPath: string | null;
 };
@@ -27,6 +29,9 @@ type ExtractResultDto = {
 let coverPath: string | null = null;
 let payloadPath: string | null = null;
 let stegoPath: string | null = null;
+let keyfilePath: string | null = null;
+let extractKeyfilePath: string | null = null;
+let lastSavedExecutable: string | null = null;
 
 function $(id: string) {
   return document.getElementById(id);
@@ -91,6 +96,13 @@ function switchTab(tab: string) {
   });
   $("panel-hide")?.classList.toggle("hidden", tab !== "hide");
   $("panel-extract")?.classList.toggle("hidden", tab !== "extract");
+  $("panel-demo")?.classList.toggle("hidden", tab !== "demo");
+  $("panel-about")?.classList.toggle("hidden", tab !== "about");
+}
+
+function hideRunBox() {
+  lastSavedExecutable = null;
+  $("run-box")?.classList.add("hidden");
 }
 
 async function onPickCover() {
@@ -124,9 +136,19 @@ async function onPickCover() {
 
 async function onPickPayload() {
   try {
-    const [path, size] = await invoke<[string, number]>("pick_payload_file");
+    const [path, size, kind] = await invoke<[string, number, string]>(
+      "pick_payload_file",
+    );
     payloadPath = path;
     $("payload-path")!.textContent = `${path} (${formatBytes(size)})`;
+    const hint = $("payload-kind-hint")!;
+    if (kind === "executable") {
+      hint.textContent =
+        "Detected as executable/script — after extract you can Save, then optionally Run with confirm.";
+      hint.classList.remove("hidden");
+    } else {
+      hint.classList.add("hidden");
+    }
     updateHideEnabled();
   } catch (e) {
     if (String(e) !== "cancelled") setHideStatus(String(e), true);
@@ -156,6 +178,9 @@ async function onHide() {
           : null,
       password: ($("password") as HTMLInputElement).value,
       verify: ($("verify-roundtrip") as HTMLInputElement).checked,
+      profile: ($("kdf-profile") as HTMLSelectElement).value,
+      keyfilePath,
+      adaptiveLsb: ($("adaptive-lsb") as HTMLInputElement).checked,
     });
     setHideStatus(
       `Saved ${result.outputPath} (${formatBytes(result.outputSize)}, .${result.extension})`,
@@ -172,6 +197,7 @@ async function onPickStego() {
     stegoPath = path;
     $("stego-path")!.textContent = `${path} (${formatBytes(size)})`;
     $("extract-text")?.classList.add("hidden");
+    hideRunBox();
     setExtractStatus("");
     updateExtractEnabled();
   } catch (e) {
@@ -183,10 +209,13 @@ async function onExtract() {
   if (!stegoPath) return;
   setExtractStatus("Working…");
   $("extract-text")?.classList.add("hidden");
+  hideRunBox();
   try {
     const result = await invoke<ExtractResultDto>("extract_payload", {
       stegoPath,
       password: ($("extract-password") as HTMLInputElement).value,
+      keyfilePath: extractKeyfilePath,
+      adaptiveLsb: ($("extract-adaptive-lsb") as HTMLInputElement).checked,
     });
     if (result.isText && result.textPreview != null) {
       const pre = $("extract-text")!;
@@ -197,14 +226,57 @@ async function onExtract() {
       );
     } else {
       setExtractStatus(
-        `Saved ${result.savedPath} via ${result.method} (${formatBytes(result.size)}${
+        `Saved ${result.savedPath} via ${result.method} [${result.kind}] (${formatBytes(result.size)}${
           result.filename ? `, as ${result.filename}` : ""
         })`,
       );
+      if (result.kind === "executable" && result.savedPath) {
+        lastSavedExecutable = result.savedPath;
+        const shortHash = result.checksumHex.slice(0, 12);
+        $("run-meta")!.textContent =
+          `${result.filename ?? "file"} · ${formatBytes(result.size)} · sha256 ${shortHash}…`;
+        $("run-box")!.classList.remove("hidden");
+      }
     }
   } catch (e) {
     if (String(e) !== "cancelled") setExtractStatus(String(e), true);
     else setExtractStatus("");
+  }
+}
+
+async function onRun() {
+  if (!lastSavedExecutable) return;
+  const ok = window.confirm(
+    "You extracted this file yourself from a cover inside Open Stego.\n\nRun it now? Only continue if you trust the source (educational demo).",
+  );
+  if (!ok) return;
+  const ok2 = window.confirm(
+    "Final confirm: start the recovered program/script?",
+  );
+  if (!ok2) return;
+  try {
+    await invoke("run_extracted", { path: lastSavedExecutable });
+    setExtractStatus(`Started: ${lastSavedExecutable}`);
+  } catch (e) {
+    setExtractStatus(String(e), true);
+  }
+}
+
+async function onPickKeyfile(forExtract: boolean) {
+  try {
+    const [path, size] = await invoke<[string, number]>("pick_keyfile");
+    if (forExtract) {
+      extractKeyfilePath = path;
+      $("extract-keyfile-path")!.textContent = `${path} (${formatBytes(size)})`;
+    } else {
+      keyfilePath = path;
+      $("keyfile-path")!.textContent = `${path} (${formatBytes(size)})`;
+    }
+  } catch (e) {
+    if (String(e) !== "cancelled") {
+      if (forExtract) setExtractStatus(String(e), true);
+      else setHideStatus(String(e), true);
+    }
   }
 }
 
@@ -225,6 +297,8 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("btn-cover")?.addEventListener("click", onPickCover);
   $("btn-payload")?.addEventListener("click", onPickPayload);
+  $("btn-keyfile")?.addEventListener("click", () => onPickKeyfile(false));
+  $("btn-extract-keyfile")?.addEventListener("click", () => onPickKeyfile(true));
   $("password")?.addEventListener("input", onPasswordInput);
   $("payload-text")?.addEventListener("input", updateHideEnabled);
   $("btn-hide")?.addEventListener("click", onHide);
@@ -232,6 +306,7 @@ window.addEventListener("DOMContentLoaded", () => {
   $("btn-stego")?.addEventListener("click", onPickStego);
   $("extract-password")?.addEventListener("input", updateExtractEnabled);
   $("btn-extract")?.addEventListener("click", onExtract);
+  $("btn-run")?.addEventListener("click", onRun);
 
   refreshModeUi();
 });

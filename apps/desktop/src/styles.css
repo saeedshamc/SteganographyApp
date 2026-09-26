@@ -81,6 +81,15 @@ body {
   font: inherit;
 }
 
+.demo-steps {
+  line-height: 1.55;
+  padding-left: 1.25rem;
+}
+
+.demo-steps li {
+  margin-bottom: 0.75rem;
+}
+
 .tab.active {
   border-color: var(--accent);
   color: var(--accent);
@@ -130,7 +139,8 @@ button:disabled {
 }
 
 input[type="password"],
-textarea {
+textarea,
+select {
   font: inherit;
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--line);
