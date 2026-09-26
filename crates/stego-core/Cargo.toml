@@ -16,5 +16,7 @@ sha2 = "0.10"
 hkdf = "0.12"
 hmac = "0.12"
 zeroize = { version = "1", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["png", "bmp"] }
+rand_chacha = "0.3"
 
 [dev-dependencies]
