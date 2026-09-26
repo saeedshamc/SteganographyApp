@@ -17,10 +17,10 @@ pub fn format_caveat(cover: &[u8], cover_path: &str) -> String {
         return "PDF: Method B appends after the file. If %%EOF was at the very end, it is moved after the stego footer so many viewers still open the document.".into();
     }
     if ext == "zip" || ext == "jar" || looks_like_zip(cover) {
-        return "ZIP/JAR: trailing Method B bytes are ignored by most unzip tools, but strict validators may complain.".into();
+        return "ZIP/JAR: Method B appends after the local-file / central-directory bytes. Most unzip tools ignore trailing data past EOCD, but antivirus and strict archive validators may flag or reject the file. Open Stego does not rewrite EOCD offsets.".into();
     }
     if ext == "mp3" || looks_like_mp3(cover) {
-        return "MP3: most players ignore trailing bytes after the last frame; capacity is effectively unbounded.".into();
+        return "MP3: Method B appends after the bitstream. Players that stop at the last valid frame usually ignore the trailer; tag editors that rewrite the whole file can strip stego data.".into();
     }
     "Method B appends data after the file end. Most formats ignore trailing bytes, but a few with strict validation may reject the output.".into()
 }
@@ -88,12 +88,25 @@ fn terminal_eof_pos(data: &[u8]) -> Option<usize> {
 }
 
 fn looks_like_zip(data: &[u8]) -> bool {
-    data.len() >= 4 && &data[..2] == b"PK"
+    // Local file header (PK\x03\x04), empty archive (PK\x05\x06), or spanned (PK\x07\x08).
+    data.len() >= 4
+        && data[0] == b'P'
+        && data[1] == b'K'
+        && matches!(data[2], 3 | 5 | 7)
+        && matches!(data[3], 4 | 6 | 8)
 }
 
 fn looks_like_mp3(data: &[u8]) -> bool {
-    (data.len() >= 3 && &data[..3] == b"ID3")
-        || (data.len() >= 2 && data[0] == 0xff && (data[1] & 0xe0) == 0xe0)
+    if data.len() >= 3 && &data[..3] == b"ID3" {
+        return true;
+    }
+    // MPEG frame sync: 11 set bits.
+    if data.len() >= 2 && data[0] == 0xff && (data[1] & 0xe0) == 0xe0 {
+        let layer = (data[1] >> 1) & 0x03;
+        // Layer bits must not be 00 (reserved).
+        return layer != 0;
+    }
+    false
 }
 
 /// Capacity risk note when payload approaches image capacity (educational).
