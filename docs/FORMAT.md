@@ -1,17 +1,12 @@
 # Container format (OpenStego)
 
-`FORMAT_VERSION` = `1` (`stego_core::container`).
+`FORMAT_VERSION` = `1` (balanced, no keyfile) or `2` (explicit KDF profile / keyfile). See [CRYPTO.md](CRYPTO.md).
 
-## Encrypted envelope (common to Method A and B)
-
-Produced by `stego_core::crypto::encrypt_blob`:
+## Encrypted envelope
 
 ```text
-offset  size  field
-0       1     version (= 1)
-1       16    salt (Argon2id)
-17      12    AES-GCM nonce
-29      n+16  ciphertext || 16-byte GCM tag
+v1: version(1) || salt(16) || nonce(12) || ciphertext||tag
+v2: version(2) || profile(u8) || salt(16) || nonce(12) || ciphertext||tag
 ```
 
 Plaintext inside the ciphertext is the **metadata blob** below.
@@ -25,6 +20,8 @@ Plaintext inside the ciphertext is the **metadata blob** below.
 ```
 
 - `flags bit0` = payload is raw text/code (no filename)
+- `flags bit1` = payload is an executable/script (educational extract-then-run demos); mutually exclusive with bit0
+- Older files without bit1 remain ordinary file payloads
 - `sha256` covers payload bytes only; verified on unwrap
 
 ## Method B footer (after cover + envelope)

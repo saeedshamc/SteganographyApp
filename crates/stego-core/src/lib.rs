@@ -16,10 +16,11 @@ pub mod metadata;
 pub mod ops;
 pub mod paths;
 
+pub use crypto::{derive_keys_with, CryptoOptions, KdfProfile, SALT_LEN};
 pub use detection::EmbeddingMethod;
 pub use error::{StegoError, StegoResult};
-pub use metadata::PayloadMeta;
-pub use ops::{extract, hide, plan_hide, ExtractedPayload, HidePlan};
+pub use metadata::{is_executable_extension, PayloadKind, PayloadMeta};
+pub use ops::{extract, extract_with, hide, hide_with, plan_hide, parse_kdf_profile, ExtractedPayload, HidePlan, StegoOptions};
 
 /// Library version string for CLI/GUI about screens.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
