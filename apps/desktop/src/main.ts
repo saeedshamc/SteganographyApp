@@ -1,18 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 type PlanDto = {
   method: string;
   capacity: number | null;
   jpegWarning: string | null;
   eofCaveat: string | null;
+  capacityRisk: string | null;
   coverPath: string;
   coverSize: number;
+  previewUrl: string | null;
 };
 
 type HideResultDto = {
   outputPath: string;
   outputSize: number;
   extension: string;
+  previewUrl: string | null;
+  diffUrl: string | null;
 };
 
 type ExtractResultDto = {
@@ -24,6 +29,17 @@ type ExtractResultDto = {
   checksumHex: string;
   textPreview: string | null;
   savedPath: string | null;
+  revealPreviewUrl: string | null;
+};
+
+type PayloadInfoDto = {
+  path: string;
+  size: number;
+  kind: string;
+};
+
+type BatchResultDto = {
+  items: { coverPath: string; ok: boolean; message: string; outputPath: string | null }[];
 };
 
 let coverPath: string | null = null;
@@ -32,6 +48,25 @@ let stegoPath: string | null = null;
 let keyfilePath: string | null = null;
 let extractKeyfilePath: string | null = null;
 let lastSavedExecutable: string | null = null;
+let batchCovers: string[] = [];
+let batchPayloadPath: string | null = null;
+let batchOutDir: string | null = null;
+let labImagePath: string | null = null;
+let activeDrop: "cover" | "payload" | "stego" | "batch-cover" | "lab" | null = null;
+
+const HIST_KEY = "openstego_recent";
+const DOC_SNIPPETS: Record<string, string> = {
+  FORMAT:
+    "FORMAT: OSMP metadata wrapper + crypto envelope versions. App semver is workspace version; breaking on-disk layouts need a new version byte.",
+  CRYPTO:
+    "CRYPTO: Argon2id (Fast/Balanced/Paranoid) → HKDF → AES-256-GCM. Optional keyfile mixes into the password material.",
+  LEARNING:
+    "LEARNING: Demo path is Hide → open cover normally → Extract → optional Run with confirm. No silent auto-run in OS viewers.",
+  EMBEDDING:
+    "EMBEDDING: Method A = keyed LSB in PNG/BMP (depth 1 or 2). Method B = keyed EOF append; PDF gets format-aware %%EOF handling.",
+  THREAT_MODEL:
+    "THREAT_MODEL: Educational privacy tool — not undetectable against a determined analyst. Passwords matter; LSB leaves statistical traces.",
+};
 
 function $(id: string) {
   return document.getElementById(id);
@@ -63,6 +98,7 @@ function refreshModeUi() {
   $("payload-file-box")?.classList.toggle("hidden", mode !== "file");
   $("payload-text-box")?.classList.toggle("hidden", mode !== "text");
   updateHideEnabled();
+  void refreshPlan();
 }
 
 function updateHideEnabled() {
@@ -77,6 +113,7 @@ function updateHideEnabled() {
   btn.disabled = !coverPath || !hasPayload || pw.length === 0;
   const reveal = $("btn-reveal-cover") as HTMLButtonElement | null;
   if (reveal) reveal.disabled = !coverPath;
+  updateBatchEnabled();
 }
 
 function updateExtractEnabled() {
@@ -84,6 +121,18 @@ function updateExtractEnabled() {
   if (!btn) return;
   const pw = ($("extract-password") as HTMLInputElement | null)?.value ?? "";
   btn.disabled = !stegoPath || pw.length === 0;
+  const reveal = $("btn-reveal-stego") as HTMLButtonElement | null;
+  if (reveal) reveal.disabled = !stegoPath;
+}
+
+function updateBatchEnabled() {
+  const btn = $("btn-batch-run") as HTMLButtonElement | null;
+  if (!btn) return;
+  const pw = ($("password") as HTMLInputElement | null)?.value ?? "";
+  const hasPayload =
+    Boolean(batchPayloadPath) ||
+    (payloadMode() === "file" ? Boolean(payloadPath) : Boolean(($("payload-text") as HTMLTextAreaElement | null)?.value.trim()));
+  btn.disabled = batchCovers.length === 0 || !batchOutDir || !hasPayload || pw.length === 0;
 }
 
 function formatBytes(n: number): string {
@@ -96,11 +145,9 @@ function switchTab(tab: string) {
   document.querySelectorAll(".tab").forEach((el) => {
     el.classList.toggle("active", (el as HTMLElement).dataset.tab === tab);
   });
-  $("panel-hide")?.classList.toggle("hidden", tab !== "hide");
-  $("panel-extract")?.classList.toggle("hidden", tab !== "extract");
-  $("panel-demo")?.classList.toggle("hidden", tab !== "demo");
-  $("panel-about")?.classList.toggle("hidden", tab !== "about");
-  $("panel-lab")?.classList.toggle("hidden", tab !== "lab");
+  for (const id of ["hide", "extract", "batch", "demo", "lab", "about"]) {
+    $(`panel-${id}`)?.classList.toggle("hidden", tab !== id);
+  }
 }
 
 function hideRunBox() {
@@ -108,30 +155,177 @@ function hideRunBox() {
   $("run-box")?.classList.add("hidden");
 }
 
+function pushHist(p: string) {
+  const arr: string[] = JSON.parse(localStorage.getItem(HIST_KEY) || "[]");
+  const next = [p, ...arr.filter((x) => x !== p)].slice(0, 10);
+  localStorage.setItem(HIST_KEY, JSON.stringify(next));
+  renderRecent();
+}
+
+function renderRecent() {
+  const list = $("recent-list");
+  const panel = $("recent-panel");
+  if (!list || !panel) return;
+  const arr: string[] = JSON.parse(localStorage.getItem(HIST_KEY) || "[]");
+  list.innerHTML = "";
+  if (arr.length === 0) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  for (const p of arr) {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "linkish";
+    btn.textContent = p;
+    btn.title = p;
+    btn.addEventListener("click", () => void applyRecentPath(p));
+    li.appendChild(btn);
+    list.appendChild(li);
+  }
+}
+
+async function applyRecentPath(p: string) {
+  const lower = p.toLowerCase();
+  if (/\.(png|bmp|jpg|jpeg|gif|webp|pdf|zip|mp3)$/.test(lower)) {
+    await applyCoverPath(p);
+    switchTab("hide");
+  } else {
+    await applyPayloadPath(p);
+    switchTab("hide");
+  }
+}
+
+function showPlan(plan: PlanDto) {
+  coverPath = plan.coverPath;
+  $("cover-path")!.textContent = `${plan.coverPath} (${formatBytes(plan.coverSize)})`;
+  $("plan-box")!.classList.remove("hidden");
+  $("plan-method")!.textContent = plan.method;
+  const capRow = $("plan-capacity-row")!;
+  if (plan.capacity != null) {
+    capRow.classList.remove("hidden");
+    $("plan-capacity")!.textContent = formatBytes(plan.capacity);
+  } else {
+    capRow.classList.add("hidden");
+  }
+  const risk = $("plan-risk")!;
+  if (plan.capacityRisk) {
+    risk.textContent = plan.capacityRisk;
+    risk.classList.remove("hidden");
+  } else {
+    risk.classList.add("hidden");
+  }
+  const caveat = $("plan-caveat")!;
+  const text = plan.eofCaveat ?? plan.jpegWarning;
+  if (text) {
+    caveat.textContent = text;
+    caveat.classList.remove("hidden");
+  } else {
+    caveat.classList.add("hidden");
+  }
+  const box = $("cover-preview-box")!;
+  const img = $("cover-preview") as HTMLImageElement;
+  if (plan.previewUrl) {
+    img.src = plan.previewUrl;
+    box.classList.remove("hidden");
+  } else {
+    box.classList.add("hidden");
+  }
+  $("stego-preview-fig")?.classList.add("hidden");
+  $("diff-preview-fig")?.classList.add("hidden");
+  pushHist(plan.coverPath);
+  updateHideEnabled();
+}
+
+async function refreshPlan() {
+  if (!coverPath) return;
+  try {
+    let payloadLen: number | undefined;
+    if (payloadMode() === "file" && payloadPath) {
+      // size unknown cheaply; plan without exact size still works
+    } else if (payloadMode() === "text") {
+      payloadLen = ($("payload-text") as HTMLTextAreaElement).value.length;
+    }
+    const plan = await invoke<PlanDto>("inspect_cover_path", {
+      path: coverPath,
+      payloadLen: payloadLen ?? null,
+      lsbDepth: Number(($("lsb-depth") as HTMLSelectElement).value),
+      adaptiveLsb: ($("adaptive-lsb") as HTMLInputElement).checked,
+    });
+    showPlan(plan);
+  } catch {
+    /* keep previous plan UI */
+  }
+}
+
+async function applyCoverPath(path: string) {
+  try {
+    const plan = await invoke<PlanDto>("inspect_cover_path", {
+      path,
+      payloadLen: null,
+      lsbDepth: Number(($("lsb-depth") as HTMLSelectElement | null)?.value ?? "1"),
+      adaptiveLsb: ($("adaptive-lsb") as HTMLInputElement | null)?.checked ?? false,
+    });
+    showPlan(plan);
+    setHideStatus("");
+  } catch (e) {
+    setHideStatus(String(e), true);
+  }
+}
+
+async function applyPayloadPath(path: string) {
+  try {
+    const info = await invoke<PayloadInfoDto>("set_payload_path", { path });
+    payloadPath = info.path;
+    $("payload-path")!.textContent = `${info.path} (${formatBytes(info.size)})`;
+    const hint = $("payload-kind-hint")!;
+    if (info.kind === "executable") {
+      hint.textContent =
+        "Detected as executable/script — after extract you can Save, then optionally Run with confirm.";
+      hint.classList.remove("hidden");
+    } else {
+      hint.classList.add("hidden");
+    }
+    pushHist(info.path);
+    updateHideEnabled();
+    void refreshPlan();
+  } catch (e) {
+    setHideStatus(String(e), true);
+  }
+}
+
+async function applyStegoPath(path: string) {
+  try {
+    const [p, size, preview] = await invoke<[string, number, string | null]>(
+      "set_stego_path",
+      { path },
+    );
+    stegoPath = p;
+    $("stego-path")!.textContent = `${p} (${formatBytes(size)})`;
+    const box = $("reveal-box")!;
+    const img = $("reveal-preview") as HTMLImageElement;
+    if (preview) {
+      img.src = preview;
+      box.classList.remove("hidden");
+    } else {
+      box.classList.add("hidden");
+    }
+    $("extract-text")?.classList.add("hidden");
+    hideRunBox();
+    setExtractStatus("");
+    pushHist(p);
+    updateExtractEnabled();
+  } catch (e) {
+    setExtractStatus(String(e), true);
+  }
+}
+
 async function onPickCover() {
   try {
     const plan = await invoke<PlanDto>("pick_cover");
-    coverPath = plan.coverPath;
-    $("cover-path")!.textContent = `${plan.coverPath} (${formatBytes(plan.coverSize)})`;
-    $("plan-box")!.classList.remove("hidden");
-    $("plan-method")!.textContent = plan.method;
-    const capRow = $("plan-capacity-row")!;
-    if (plan.capacity != null) {
-      capRow.classList.remove("hidden");
-      $("plan-capacity")!.textContent = formatBytes(plan.capacity);
-    } else {
-      capRow.classList.add("hidden");
-    }
-    const caveat = $("plan-caveat")!;
-    const text = plan.eofCaveat ?? plan.jpegWarning;
-    if (text) {
-      caveat.textContent = text;
-      caveat.classList.remove("hidden");
-    } else {
-      caveat.classList.add("hidden");
-    }
+    showPlan(plan);
     setHideStatus("");
-    updateHideEnabled();
   } catch (e) {
     if (String(e) !== "cancelled") setHideStatus(String(e), true);
   }
@@ -139,19 +333,18 @@ async function onPickCover() {
 
 async function onPickPayload() {
   try {
-    const [path, size, kind] = await invoke<[string, number, string]>(
-      "pick_payload_file",
-    );
-    payloadPath = path;
-    $("payload-path")!.textContent = `${path} (${formatBytes(size)})`;
+    const info = await invoke<PayloadInfoDto>("pick_payload_file");
+    payloadPath = info.path;
+    $("payload-path")!.textContent = `${info.path} (${formatBytes(info.size)})`;
     const hint = $("payload-kind-hint")!;
-    if (kind === "executable") {
+    if (info.kind === "executable") {
       hint.textContent =
         "Detected as executable/script — after extract you can Save, then optionally Run with confirm.";
       hint.classList.remove("hidden");
     } else {
       hint.classList.add("hidden");
     }
+    pushHist(info.path);
     updateHideEnabled();
   } catch (e) {
     if (String(e) !== "cancelled") setHideStatus(String(e), true);
@@ -184,11 +377,24 @@ async function onHide() {
       profile: ($("kdf-profile") as HTMLSelectElement).value,
       keyfilePath,
       adaptiveLsb: ($("adaptive-lsb") as HTMLInputElement).checked,
-      lsbDepth: Number(($("lsb-depth") as HTMLSelectElement | null)?.value ?? "1"),
+      lsbDepth: Number(($("lsb-depth") as HTMLSelectElement).value),
+      outputPath: null,
     });
     setHideStatus(
       `Saved ${result.outputPath} (${formatBytes(result.outputSize)}, .${result.extension})`,
     );
+    pushHist(result.outputPath);
+    const box = $("cover-preview-box")!;
+    if (result.previewUrl) {
+      ($("stego-preview") as HTMLImageElement).src = result.previewUrl;
+      $("stego-preview-fig")!.classList.remove("hidden");
+      box.classList.remove("hidden");
+    }
+    if (result.diffUrl) {
+      ($("diff-preview") as HTMLImageElement).src = result.diffUrl;
+      $("diff-preview-fig")!.classList.remove("hidden");
+      box.classList.remove("hidden");
+    }
   } catch (e) {
     if (String(e) !== "cancelled") setHideStatus(String(e), true);
     else setHideStatus("");
@@ -197,12 +403,22 @@ async function onHide() {
 
 async function onPickStego() {
   try {
-    const [path, size] = await invoke<[string, number]>("pick_stego_file");
+    const [path, size, preview] = await invoke<[string, number, string | null]>(
+      "pick_stego_file",
+    );
     stegoPath = path;
     $("stego-path")!.textContent = `${path} (${formatBytes(size)})`;
+    const box = $("reveal-box")!;
+    if (preview) {
+      ($("reveal-preview") as HTMLImageElement).src = preview;
+      box.classList.remove("hidden");
+    } else {
+      box.classList.add("hidden");
+    }
     $("extract-text")?.classList.add("hidden");
     hideRunBox();
     setExtractStatus("");
+    pushHist(path);
     updateExtractEnabled();
   } catch (e) {
     if (String(e) !== "cancelled") setExtractStatus(String(e), true);
@@ -220,8 +436,12 @@ async function onExtract() {
       password: ($("extract-password") as HTMLInputElement).value,
       keyfilePath: extractKeyfilePath,
       adaptiveLsb: ($("extract-adaptive-lsb") as HTMLInputElement).checked,
-      lsbDepth: 1,
+      lsbDepth: Number(($("extract-lsb-depth") as HTMLSelectElement).value),
     });
+    if (result.revealPreviewUrl) {
+      ($("reveal-preview") as HTMLImageElement).src = result.revealPreviewUrl;
+      $("reveal-box")!.classList.remove("hidden");
+    }
     if (result.isText && result.textPreview != null) {
       const pre = $("extract-text")!;
       pre.textContent = result.textPreview;
@@ -285,6 +505,52 @@ async function onPickKeyfile(forExtract: boolean) {
   }
 }
 
+function renderBatchList() {
+  const ul = $("batch-list");
+  if (!ul) return;
+  ul.innerHTML = "";
+  for (const p of batchCovers) {
+    const li = document.createElement("li");
+    li.textContent = p;
+    ul.appendChild(li);
+  }
+  updateBatchEnabled();
+}
+
+async function handleDroppedPaths(paths: string[]) {
+  if (!paths.length) return;
+  const kind = activeDrop;
+  activeDrop = null;
+  if (kind === "cover" || (!kind && paths.length === 1)) {
+    await applyCoverPath(paths[0]!);
+    return;
+  }
+  if (kind === "payload") {
+    await applyPayloadPath(paths[0]!);
+    return;
+  }
+  if (kind === "stego") {
+    await applyStegoPath(paths[0]!);
+    return;
+  }
+  if (kind === "lab") {
+    labImagePath = paths[0]!;
+    $("lab-path")!.textContent = labImagePath;
+    ($("btn-lab-live") as HTMLButtonElement).disabled = false;
+    pushHist(labImagePath);
+    return;
+  }
+  if (kind === "batch-cover") {
+    for (const p of paths) {
+      if (!batchCovers.includes(p)) batchCovers.push(p);
+    }
+    renderBatchList();
+    return;
+  }
+  // Default: first path as cover
+  await applyCoverPath(paths[0]!);
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   invoke<string>("app_version").then((v) => {
     $("version-msg")!.textContent = `stego-core ${v}`;
@@ -305,7 +571,12 @@ window.addEventListener("DOMContentLoaded", () => {
   $("btn-keyfile")?.addEventListener("click", () => onPickKeyfile(false));
   $("btn-extract-keyfile")?.addEventListener("click", () => onPickKeyfile(true));
   $("password")?.addEventListener("input", onPasswordInput);
-  $("payload-text")?.addEventListener("input", updateHideEnabled);
+  $("payload-text")?.addEventListener("input", () => {
+    updateHideEnabled();
+    void refreshPlan();
+  });
+  $("lsb-depth")?.addEventListener("change", () => void refreshPlan());
+  $("adaptive-lsb")?.addEventListener("change", () => void refreshPlan());
   $("btn-hide")?.addEventListener("click", onHide);
   $("btn-reveal-cover")?.addEventListener("click", async () => {
     if (!coverPath) return;
@@ -315,11 +586,82 @@ window.addEventListener("DOMContentLoaded", () => {
       setHideStatus(String(e), true);
     }
   });
+  $("btn-reveal-stego")?.addEventListener("click", async () => {
+    if (!stegoPath) return;
+    try {
+      await invoke("open_path", { path: stegoPath });
+    } catch (e) {
+      setExtractStatus(String(e), true);
+    }
+  });
 
   $("btn-stego")?.addEventListener("click", onPickStego);
   $("extract-password")?.addEventListener("input", updateExtractEnabled);
   $("btn-extract")?.addEventListener("click", onExtract);
   $("btn-run")?.addEventListener("click", onRun);
+
+  $("btn-batch-add")?.addEventListener("click", async () => {
+    try {
+      // reuse cover picker repeatedly is awkward; ask user to drop or pick one-by-one via cover dialog
+      const plan = await invoke<PlanDto>("pick_cover");
+      if (!batchCovers.includes(plan.coverPath)) batchCovers.push(plan.coverPath);
+      renderBatchList();
+      pushHist(plan.coverPath);
+    } catch (e) {
+      if (String(e) !== "cancelled") setHideStatus(String(e), true);
+    }
+  });
+  $("btn-batch-payload")?.addEventListener("click", async () => {
+    try {
+      const info = await invoke<PayloadInfoDto>("pick_payload_file");
+      batchPayloadPath = info.path;
+      $("batch-payload-path")!.textContent = info.path;
+      updateBatchEnabled();
+    } catch (e) {
+      if (String(e) !== "cancelled") setHideStatus(String(e), true);
+    }
+  });
+  $("btn-batch-outdir")?.addEventListener("click", async () => {
+    try {
+      batchOutDir = await invoke<string>("pick_output_dir");
+      $("batch-outdir")!.textContent = batchOutDir;
+      updateBatchEnabled();
+    } catch (e) {
+      if (String(e) !== "cancelled") setHideStatus(String(e), true);
+    }
+  });
+  $("btn-batch-run")?.addEventListener("click", async () => {
+    if (!batchOutDir) return;
+    const mode = payloadMode();
+    const out = $("batch-out")!;
+    out.classList.remove("hidden");
+    out.textContent = "Working…";
+    try {
+      const result = await invoke<BatchResultDto>("batch_hide", {
+        coverPaths: batchCovers,
+        payloadPath: batchPayloadPath ?? (mode === "file" ? payloadPath : null),
+        textPayload:
+          !batchPayloadPath && mode === "text"
+            ? ($("payload-text") as HTMLTextAreaElement).value
+            : null,
+        password: ($("password") as HTMLInputElement).value,
+        profile: ($("kdf-profile") as HTMLSelectElement).value,
+        keyfilePath,
+        adaptiveLsb: ($("adaptive-lsb") as HTMLInputElement).checked,
+        lsbDepth: Number(($("lsb-depth") as HTMLSelectElement).value),
+        outputDir: batchOutDir,
+      });
+      out.textContent = result.items
+        .map(
+          (i) =>
+            `${i.ok ? "OK" : "FAIL"}  ${i.coverPath}\n  ${i.message}${i.outputPath ? `\n  → ${i.outputPath}` : ""}`,
+        )
+        .join("\n\n");
+    } catch (e) {
+      out.textContent = String(e);
+    }
+  });
+
   $("btn-lab-run")?.addEventListener("click", async () => {
     try {
       const text = await invoke<string>("lab_lsb_demo");
@@ -330,6 +672,28 @@ window.addEventListener("DOMContentLoaded", () => {
       setExtractStatus(String(e), true);
     }
   });
+  $("btn-lab-pick")?.addEventListener("click", async () => {
+    try {
+      labImagePath = await invoke<string>("pick_lab_image");
+      $("lab-path")!.textContent = labImagePath;
+      ($("btn-lab-live") as HTMLButtonElement).disabled = false;
+      pushHist(labImagePath);
+    } catch (e) {
+      if (String(e) !== "cancelled") setExtractStatus(String(e), true);
+    }
+  });
+  $("btn-lab-live")?.addEventListener("click", async () => {
+    if (!labImagePath) return;
+    try {
+      const text = await invoke<string>("lab_lsb_on_image", { path: labImagePath });
+      const pre = $("lab-out")!;
+      pre.textContent = text;
+      pre.classList.remove("hidden");
+    } catch (e) {
+      setExtractStatus(String(e), true);
+    }
+  });
+
   $("btn-dismiss-wizard")?.addEventListener("click", () => {
     localStorage.setItem("openstego_wizard_done", "1");
     $("wizard-box")?.classList.add("hidden");
@@ -338,23 +702,19 @@ window.addEventListener("DOMContentLoaded", () => {
     $("wizard-box")?.classList.add("hidden");
   }
 
-  // Recent path history (no passwords).
-  const histKey = "openstego_recent";
-  const pushHist = (p: string) => {
-    const arr: string[] = JSON.parse(localStorage.getItem(histKey) || "[]");
-    const next = [p, ...arr.filter((x) => x !== p)].slice(0, 8);
-    localStorage.setItem(histKey, JSON.stringify(next));
-  };
-  const origPickCover = onPickCover;
-  // Wrap status updates to record history when paths change via existing handlers.
-  const coverEl = $("cover-path");
-  const obs = new MutationObserver(() => {
-    const t = coverEl?.textContent ?? "";
-    if (t && !t.startsWith("No cover")) pushHist(t.split(" (")[0]!);
+  document.querySelectorAll("[data-doc]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const key = (el as HTMLElement).dataset.doc ?? "";
+      $("doc-snippet")!.textContent = DOC_SNIPPETS[key] ?? "";
+    });
   });
-  if (coverEl) obs.observe(coverEl, { childList: true, characterData: true, subtree: true });
 
   document.querySelectorAll(".drop-zone").forEach((zone) => {
+    zone.addEventListener("dragenter", () => {
+      activeDrop = ((zone as HTMLElement).dataset.drop as typeof activeDrop) ?? null;
+      zone.classList.add("dragover");
+    });
     zone.addEventListener("dragover", (e) => {
       e.preventDefault();
       zone.classList.add("dragover");
@@ -363,12 +723,24 @@ window.addEventListener("DOMContentLoaded", () => {
     zone.addEventListener("drop", (e) => {
       e.preventDefault();
       zone.classList.remove("dragover");
-      setHideStatus(
-        "Drag-and-drop of OS paths needs the native file dialog in this build — use Choose cover / payload.",
-      );
-      void origPickCover;
     });
   });
 
+  void getCurrentWebview()
+    .onDragDropEvent((event) => {
+      if (event.payload.type === "over") {
+        document.querySelectorAll(".drop-zone").forEach((z) => z.classList.add("dragover"));
+      } else if (event.payload.type === "leave") {
+        document.querySelectorAll(".drop-zone").forEach((z) => z.classList.remove("dragover"));
+      } else if (event.payload.type === "drop") {
+        document.querySelectorAll(".drop-zone").forEach((z) => z.classList.remove("dragover"));
+        void handleDroppedPaths(event.payload.paths);
+      }
+    })
+    .catch(() => {
+      /* webview API unavailable outside Tauri */
+    });
+
+  renderRecent();
   refreshModeUi();
 });

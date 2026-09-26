@@ -29,7 +29,7 @@ body {
 }
 
 .shell {
-  max-width: 720px;
+  max-width: 860px;
   margin: 0 auto;
   padding: 2rem 1.25rem 3rem;
 }
@@ -96,6 +96,72 @@ body {
   background: var(--bg-accent);
 }
 
+.preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.preview-row figure {
+  margin: 0;
+  max-width: 200px;
+}
+
+.preview-row img {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.recent {
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.recent ul {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent li {
+  margin: 0.2rem 0;
+}
+
+button.linkish,
+.recent button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  padding: 0;
+  text-align: left;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-links {
+  padding-left: 1.2rem;
+  line-height: 1.55;
+}
+
+.doc-links a {
+  color: var(--accent);
+}
+
+#batch-list {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  max-height: 160px;
+  overflow: auto;
+}
 
 .tab.active {
   border-color: var(--accent);
