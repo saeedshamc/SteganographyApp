@@ -6,7 +6,7 @@ use crate::crypto::{
     decrypt_blob_with, encrypt_blob_with, CryptoOptions, KdfProfile,
 };
 use crate::detection::{detect_from_bytes, CoverDecision, EmbeddingMethod};
-use crate::embedding::{method_a_lsb, method_b_eof};
+use crate::embedding::{format_aware, method_a_lsb, method_b_eof};
 use crate::error::{StegoError, StegoResult};
 use crate::metadata::{unwrap_payload, wrap_payload, PayloadMeta};
 
@@ -17,53 +17,82 @@ pub struct HidePlan {
     pub capacity: Option<usize>,
     pub jpeg_warning: Option<String>,
     pub eof_caveat: Option<String>,
+    /// Set when a known payload size would stress LSB capacity.
+    pub capacity_risk: Option<String>,
 }
 
 /// Options for hide/extract (KDF profile, keyfile, LSB adaptive).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct StegoOptions {
     pub crypto: CryptoOptions,
-    /// Prefer high-variance pixels for Method A (educational; same capacity formula).
+    /// Prefer high-variance pixels for Method A (lower capacity).
     pub adaptive_lsb: bool,
+    /// LSB depth 1 (default) or 2 (denser; noisier — educational).
+    pub lsb_depth: u8,
 }
 
-const EOF_CAVEAT: &str =
-    "Method B appends data after the file end. Most formats ignore trailing bytes, but a few with strict validation may reject the output.";
+impl Default for StegoOptions {
+    fn default() -> Self {
+        Self {
+            crypto: CryptoOptions::default(),
+            adaptive_lsb: false,
+            lsb_depth: 1,
+        }
+    }
+}
 
 /// Inspect cover bytes and path; return which method and capacity (if LSB).
 pub fn plan_hide(cover: &[u8], cover_path: &str) -> StegoResult<HidePlan> {
+    plan_hide_with(cover, cover_path, &StegoOptions::default(), None)
+}
+
+pub fn plan_hide_with(
+    cover: &[u8],
+    cover_path: &str,
+    opts: &StegoOptions,
+    payload_len: Option<usize>,
+) -> StegoResult<HidePlan> {
     let decision = detect_from_bytes(cover, Some(cover_path))?;
     match decision {
         CoverDecision::UseLsb { .. } => {
             let img = image::load_from_memory(cover)
                 .map_err(|e| StegoError::UnsupportedCover(format!("cannot decode image: {e}")))?;
             let (w, h) = img.dimensions();
-            let capacity = method_a_lsb::capacity_bytes(w, h)?;
+            let depth = format_aware::normalize_lsb_depth(opts.lsb_depth)?;
+            let mut capacity = method_a_lsb::capacity_bytes(w, h)?;
+            if opts.adaptive_lsb {
+                capacity /= 2;
+            }
+            // Depth 2 roughly doubles usable channel bits (educational approximation).
+            if depth == 2 {
+                capacity = capacity.saturating_mul(2);
+            }
+            let capacity_risk = payload_len.and_then(|n| {
+                // Envelope is larger than raw payload; approximate with +96 bytes overhead.
+                format_aware::capacity_risk_note(n.saturating_add(96), capacity)
+            });
+            let mut depth_warning = None;
+            if depth == 2 {
+                depth_warning = Some(
+                    "LSB depth 2 increases capacity but also visible noise risk — prefer depth 1 for stealth demos."
+                        .into(),
+                );
+            }
             Ok(HidePlan {
                 method: EmbeddingMethod::Lsb,
                 capacity: Some(capacity),
-                jpeg_warning: None,
+                jpeg_warning: depth_warning,
                 eof_caveat: None,
+                capacity_risk,
             })
         }
-        CoverDecision::UseEof { .. } => {
-            let ext = std::path::Path::new(cover_path)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("")
-                .to_ascii_lowercase();
-            let caveat = if ext == "pdf" || cover.starts_with(b"%PDF") {
-                "PDF (Method B): encrypted payload is appended after the file. Most viewers ignore trailing bytes; a trailing %%EOF may still be present earlier in the file."
-            } else {
-                EOF_CAVEAT
-            };
-            Ok(HidePlan {
-                method: EmbeddingMethod::Eof,
-                capacity: None,
-                jpeg_warning: None,
-                eof_caveat: Some(caveat.into()),
-            })
-        }
+        CoverDecision::UseEof { .. } => Ok(HidePlan {
+            method: EmbeddingMethod::Eof,
+            capacity: None,
+            jpeg_warning: None,
+            eof_caveat: Some(format_aware::format_caveat(cover, cover_path)),
+            capacity_risk: None,
+        }),
         CoverDecision::JpegNeedsConversion => Err(StegoError::UnsupportedCover(
             "JPEG cover detected. Lossy JPEG destroys LSB data. Convert to PNG first, or choose another cover."
                 .into(),
@@ -97,7 +126,8 @@ pub fn hide_with(
     password: &str,
     opts: &StegoOptions,
 ) -> StegoResult<(Vec<u8>, String)> {
-    let plan = plan_hide(cover, cover_path)?;
+    let _ = format_aware::normalize_lsb_depth(opts.lsb_depth)?;
+    let plan = plan_hide_with(cover, cover_path, opts, Some(payload.len()))?;
     let wrapped = wrap_payload(meta, payload)?;
     let envelope = encrypt_blob_with(&wrapped, password, &opts.crypto)?;
 
@@ -119,8 +149,10 @@ pub fn hide_with(
             Ok((png, "png".into()))
         }
         EmbeddingMethod::Eof => {
+            let prepared = format_aware::prepare_cover(cover, cover_path);
             let stego =
-                method_b_eof::embed_with(cover, &envelope, password, &opts.crypto)?;
+                method_b_eof::embed_with(&prepared, &envelope, password, &opts.crypto)?;
+            let stego = format_aware::finalize_stego(stego, cover, cover_path);
             let ext = std::path::Path::new(cover_path)
                 .extension()
                 .and_then(|e| e.to_str())
@@ -171,7 +203,9 @@ pub fn extract_with(
     };
 
     let try_eof = || -> StegoResult<ExtractedPayload> {
-        let envelope = method_b_eof::extract_with(stego, password, &opts.crypto)?;
+        let body = format_aware::strip_for_extract(stego, stego_path);
+        let envelope = method_b_eof::extract_with(&body, password, &opts.crypto)
+            .or_else(|_| method_b_eof::extract_with(stego, password, &opts.crypto))?;
         let plain = decrypt_blob_with(&envelope, password, keyfile)?;
         let (meta, data) = unwrap_payload(&plain)?;
         Ok(ExtractedPayload {
@@ -240,6 +274,17 @@ mod tests {
     }
 
     #[test]
+    fn hide_extract_pdf_terminal_eof() {
+        let cover = b"%PDF-1.4\nhello\n%%EOF\n";
+        let data = b"x";
+        let meta = PayloadMeta::for_text(data);
+        let (stego, _) = hide(cover, "t.pdf", &meta, data, "pw").unwrap();
+        assert!(stego.windows(5).rposition(|w| w == b"%%EOF").is_some());
+        let out = extract(&stego, "t.pdf", "pw").unwrap();
+        assert_eq!(out.data, data);
+    }
+
+    #[test]
     fn hide_extract_with_keyfile_and_fast() {
         let cover = png_cover(180, 180);
         let data = b"kf";
@@ -250,6 +295,7 @@ mod tests {
                 keyfile: Some(b"kf-bytes".to_vec()),
             },
             adaptive_lsb: false,
+            lsb_depth: 1,
         };
         let (stego, _) =
             hide_with(&cover, "c.png", &meta, data, "pw", &opts).unwrap();
@@ -263,5 +309,18 @@ mod tests {
             ..opts.clone()
         };
         assert!(extract_with(&stego, "c.png", "pw", &bad).is_err());
+    }
+
+    #[test]
+    fn plan_reports_capacity_risk() {
+        let cover = png_cover(64, 64);
+        let plan = plan_hide_with(
+            &cover,
+            "c.png",
+            &StegoOptions::default(),
+            Some(10_000),
+        )
+        .unwrap();
+        assert!(plan.capacity_risk.is_some());
     }
 }
