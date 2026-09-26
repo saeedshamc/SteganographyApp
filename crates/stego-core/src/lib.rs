@@ -14,6 +14,7 @@ pub mod embedding;
 pub mod error;
 pub mod metadata;
 pub mod ops;
+pub mod paths;
 
 pub use detection::EmbeddingMethod;
 pub use error::{StegoError, StegoResult};
