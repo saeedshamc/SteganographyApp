@@ -1,9 +1,7 @@
-# Lab challenges (Phase D starter)
+# Mobile challenges / answers index
 
-Place classroom challenge covers here later. For now use:
+| Challenge | Topic | Answer doc |
+|-----------|--------|------------|
+| 01 | Executable demo hide/extract | [challenge-01.md](challenge-01.md) |
 
-- `test-fixtures/demo/` — executable demo scripts
-- GUI **Demo** / **About** tabs
-- CLI: `stego inspect`, `stego doctor`, `stego bench`
-
-Suggested first challenge (manual): hide `demo-hello.bat` in a PNG with password `lab1`, then extract without looking at the source.
+Instructor notes stay in each challenge file under **Answer notes**.

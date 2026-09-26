@@ -1,20 +1,25 @@
-# Mobile (Flutter) — Phase F
+# Mobile (Flutter) — Phase F scaffold
 
 Desktop (Rust `stego-core` + CLI + Tauri) is the source of truth for the wire format in [`docs/FORMAT.md`](../../docs/FORMAT.md).
 
 ## Status
 
-**Scaffold reserved.** Core format now includes:
+Scaffold present:
 
-- Executable payload kind (`flags bit1`)
-- KDF profiles + optional keyfile (envelope v1/v2)
-- Adaptive LSB (desktop/CLI)
+- `pubspec.yaml` + `lib/main.dart` + `lib/stego_ffi.dart` (FFI stub)
+- `rust/README.md` — how to link `stego-core`
 
-## When implementing
+Run locally once Flutter SDK is installed:
 
-1. `flutter create .` in this directory (keep system Flutter SDK).
-2. Expose `stego-core` via **FFI** (`cbindgen` / `flutter_rust_bridge`) for `hide_with` / `extract_with`.
-3. Mirror Hide / Extract / Demo UX from `apps/desktop` — Save then optional Run with confirm; no OS auto-run.
-4. Same passwords / keyfiles / profiles as CLI.
+```text
+cd apps/mobile
+flutter create . --project-name open_stego_mobile
+flutter pub get
+flutter run
+```
 
-See [`docs/PHASE2_PLAN.md`](../../docs/PHASE2_PLAN.md) Phase F.
+(`flutter create` may add `android/` / `ios/` / `windows/` folders; keep the existing `lib/` sources.)
+
+## UX rules
+
+Same as desktop: Hide / Extract / optional Run only after explicit confirm. No OS auto-run of cover files.

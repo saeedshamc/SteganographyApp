@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  release:
+    types: [published]
 
 jobs:
   test:
@@ -14,8 +16,27 @@ jobs:
         with:
           components: clippy
       - name: Test
-        run: cargo test -p stego-core -p stego-cli --locked
+        run: cargo test -p stego-core -p stego-cli
       - name: Clippy
         run: cargo clippy -p stego-core -p stego-cli -- -D warnings
 
-  # Full NSIS/deb builds stay on scripts/ locally; CI keeps the core green.
+  linux-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build release CLI
+        run: cargo build -p stego-cli --release
+      - name: Checksum
+        run: |
+          sha256sum target/release/stego > stego-linux-sha256.txt
+          cat stego-linux-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stego-cli-linux
+          path: |
+            target/release/stego
+            stego-linux-sha256.txt
+
+  # NSIS/deb GUI installers: use scripts/build-windows.ps1 and scripts/build-linux*.sh locally
+  # or extend this workflow with platform-specific runners when ready.
