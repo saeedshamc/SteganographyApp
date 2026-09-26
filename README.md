@@ -12,6 +12,15 @@ Open-source steganography toolkit: hide **encrypted** payloads in almost any cov
 3. Enter a password (Argon2id → AES-256-GCM)
 4. Save an output that still opens as the original format (when the format allows trailing data / lossless pixels)
 5. Later: open the output, enter the password, recover the exact payload (name + checksum)
+6. **Demo:** hide a small script from `test-fixtures/demo/`, open the cover in a normal viewer (still looks normal), then Extract in Open Stego and optionally **Run** with an explicit confirm — see the GUI **Demo** tab and [LEARNING.md](docs/LEARNING.md)
+
+Executable payloads are tagged in metadata (`flags bit1`). CLI optional run:
+
+```powershell
+cargo run -p stego-cli -- extract --input .\demo_stego.png -o .\recovered.bat --run --i-understand
+```
+
+There is **no** silent auto-run when you double-click a cover in the OS; that keeps the project educational and transparent.
 
 ## Embedding methods
 
@@ -68,7 +77,9 @@ npm run tauri dev
 - [CRYPTO.md](docs/CRYPTO.md) — Argon2id + AES-256-GCM + key schedule
 - [EMBEDDING.md](docs/EMBEDDING.md) — Method A/B
 - [THREAT_MODEL.md](docs/THREAT_MODEL.md) — what this resists / does not claim
-- [LEARNING.md](docs/LEARNING.md) — how to study the code
+- [LEARNING.md](docs/LEARNING.md) — how to study the code (+ executable demo)
+- [PHASE2_PLAN.md](docs/PHASE2_PLAN.md) — full upgrade roadmap
+- [PHASE2_START.md](docs/PHASE2_START.md) — current sprint checklist
 
 ## Release builds
 
