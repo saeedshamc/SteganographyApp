@@ -1,0 +1,15 @@
+[package]
+name = "stego-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Command-line interface for Open Stego"
+
+[[bin]]
+name = "stego"
+path = "src/main.rs"
+
+[dependencies]
+stego-core = { workspace = true }
+clap = { workspace = true }
