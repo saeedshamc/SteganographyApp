@@ -1,40 +1,77 @@
 # Open Stego
 
-Open-source steganography toolkit: hide encrypted payloads in any cover file, extract them later, and learn how it works.
+Open-source steganography toolkit: hide **encrypted** payloads in almost any cover file, extract them later, and learn exactly how the bits move.
 
-**Desktop first (this repo):** Rust core + CLI + Tauri GUI (Windows / Linux).  
-**Mobile later:** Flutter app in [`apps/mobile`](apps/mobile) — same on-disk format, after desktop stages land.
+**Desktop (ready):** Rust core + `stego` CLI + Tauri GUI (Windows / Linux).  
+**Mobile (next):** Flutter in [`apps/mobile`](apps/mobile) — same on-disk format after desktop.
 
-## Layout
+## What it does
 
-| Path | Role |
-|------|------|
-| `crates/stego-core` | Crypto, metadata, Method A/B embedding |
-| `crates/stego-cli` | `stego` command-line tool |
-| `apps/desktop` | Tauri 2 GUI |
-| `apps/mobile` | Flutter placeholder (post-desktop) |
-| `docs/` | Open format, crypto, threat model, learning path |
+1. Pick any cover (image, PDF, audio, archive, …)
+2. Pick a file or paste text/code as the payload
+3. Enter a password (Argon2id → AES-256-GCM)
+4. Save an output that still opens as the original format (when the format allows trailing data / lossless pixels)
+5. Later: open the output, enter the password, recover the exact payload (name + checksum)
 
-## Quick start (desktop)
+## Embedding methods
+
+| Cover | Method | Notes |
+|-------|--------|--------|
+| PNG, BMP | **A — keyed random LSB** | Output always PNG. Capacity shown in UI/CLI. |
+| JPEG | Rejected | Lossy compression destroys LSB; convert to PNG first. |
+| Everything else | **B — keyed EOF append** | Trailing encrypted blob + HMAC locator (no fixed plaintext magic). |
+
+See [docs/EMBEDDING.md](docs/EMBEDDING.md) for trade-offs and the Method B caveat.
+
+## Quick start
+
+### CLI
 
 ```powershell
-# CLI
-cargo build -p stego-cli
-cargo run -p stego-cli -- --help
+cargo build -p stego-cli --release
+$env:STEGO_PASSWORD = "your-passphrase"
 
-# GUI
+cargo run -p stego-cli -- plan --cover .\photo.png
+cargo run -p stego-cli -- hide --cover .\doc.pdf --payload .\secret.zip -o .\out.pdf --verify
+cargo run -p stego-cli -- extract --input .\out.pdf -o .\recovered.zip
+```
+
+Hide text:
+
+```powershell
+cargo run -p stego-cli -- hide --cover .\a.pdf --text "notes" -o .\a_stego.pdf --verify
+cargo run -p stego-cli -- extract --input .\a_stego.pdf --stdout
+```
+
+### GUI
+
+```powershell
 cd apps/desktop
 npm install
 npm run tauri dev
 ```
 
-## Docs (outlines; filled as stages land)
+## Layout
 
-- [FORMAT.md](docs/FORMAT.md) — binary container layout
-- [CRYPTO.md](docs/CRYPTO.md) — Argon2id + AES-256-GCM
-- [EMBEDDING.md](docs/EMBEDDING.md) — Method A (LSB) and Method B (EOF)
-- [THREAT_MODEL.md](docs/THREAT_MODEL.md) — what this resists / does not
+| Path | Role |
+|------|------|
+| `crates/stego-core` | Crypto, metadata, Method A/B, detection, hide/extract ops |
+| `crates/stego-cli` | `stego` CLI |
+| `apps/desktop` | Tauri 2 GUI |
+| `apps/mobile` | Flutter placeholder (post-desktop) |
+| `docs/` | Open format, crypto, threat model, learning path |
+
+## Documentation
+
+- [FORMAT.md](docs/FORMAT.md) — binary layout
+- [CRYPTO.md](docs/CRYPTO.md) — Argon2id + AES-256-GCM + key schedule
+- [EMBEDDING.md](docs/EMBEDDING.md) — Method A/B
+- [THREAT_MODEL.md](docs/THREAT_MODEL.md) — what this resists / does not claim
 - [LEARNING.md](docs/LEARNING.md) — how to study the code
+
+## Ethics
+
+Built for privacy, education, and research. The design is intentionally transparent so others can audit and learn. It is not a guide for malware delivery or abuse.
 
 ## License
 
