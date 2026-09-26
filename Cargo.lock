@@ -3726,6 +3726,7 @@ dependencies = [
 name = "stego-desktop"
 version = "0.1.0"
 dependencies = [
+ "image",
  "open",
  "rfd",
  "serde",
@@ -3734,6 +3735,15 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+]
+
+[[package]]
+name = "stego-ffi"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "stego-core",
 ]
 
 [[package]]

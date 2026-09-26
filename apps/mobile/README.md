@@ -1,25 +1,12 @@
-# Mobile (Flutter) — Phase F scaffold
+# Open Stego Mobile
 
-Desktop (Rust `stego-core` + CLI + Tauri) is the source of truth for the wire format in [`docs/FORMAT.md`](../../docs/FORMAT.md).
-
-## Status
-
-Scaffold present:
-
-- `pubspec.yaml` + `lib/main.dart` + `lib/stego_ffi.dart` (FFI stub)
-- `rust/README.md` — how to link `stego-core`
-
-Run locally once Flutter SDK is installed:
+Flutter client over `stego-ffi` → `stego-core`.
 
 ```text
-cd apps/mobile
-flutter create . --project-name open_stego_mobile
+cargo build -p stego-ffi --release
+# place stego_ffi.dll / libstego_ffi.so where the Dart loader can find it
 flutter pub get
-flutter run
+flutter run   # after `flutter create .` if platform folders are missing
 ```
 
-(`flutter create` may add `android/` / `ios/` / `windows/` folders; keep the existing `lib/` sources.)
-
-## UX rules
-
-Same as desktop: Hide / Extract / optional Run only after explicit confirm. No OS auto-run of cover files.
+See [rust/README.md](rust/README.md) for the C API and UX rules.
