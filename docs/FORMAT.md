@@ -8,14 +8,16 @@
 - Recover original filename / extension or raw text flag
 - Integrity check (SHA-256) after decryption
 
-## High-level envelope
+## High-level envelope (after encryption)
 
 ```
-[salt][nonce][AES-GCM ciphertext of metadata+payload]
+version || salt || nonce || AES-GCM(ciphertext of metadata blob)
 ```
 
-Method B adds a keyed locator footer after the cover bytes. Method A spreads the envelope across image LSBs with a password-derived permutation.
+## Metadata blob (inside ciphertext) — magic `OSMP`
 
-## Version
+```
+magic "OSMP" | version | flags | name_len | name | ext_len | ext | size | sha256 | payload
+```
 
-`FORMAT_VERSION` in `stego-core::container` tracks breaking changes.
+See `stego_core::metadata` for exact endianness and flag bits.
