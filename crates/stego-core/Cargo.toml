@@ -9,5 +9,12 @@ description = "Open steganography core: crypto, metadata, and embedding methods"
 [dependencies]
 thiserror = { workspace = true }
 serde = { workspace = true }
+argon2 = "0.5"
+aes-gcm = "0.10"
+rand = "0.8"
+sha2 = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
+zeroize = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
