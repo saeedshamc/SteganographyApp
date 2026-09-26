@@ -1,7 +1,7 @@
 name: open_stego_mobile
 description: Open Stego Flutter client (Phase F scaffold)
 publish_to: "none"
-version: 0.3.3+1
+version: 0.3.4+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"

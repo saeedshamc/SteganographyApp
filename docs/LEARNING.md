@@ -28,7 +28,41 @@ See also [PHASE2_PLAN.md](PHASE2_PLAN.md) and [PHASE2_START.md](PHASE2_START.md)
 cargo test -p stego-core --lib
 ```
 
-Unit tests cover crypto round-trips, metadata checksums (including executable flag), EOF fixtures (PDF/MP3/ZIP-like), LSB PNG round-trips, and detection rules.
+Unit tests cover crypto round-trips, metadata checksums (including executable flag), EOF fixtures (PDF/MP3/ZIP-like), LSB PNG round-trips (depth 1 and 2), and detection rules.
+
+## Shell completions
+
+Generate and install completions for your shell:
+
+```powershell
+# PowerShell (current user profile)
+cargo run -p stego-cli -- completions powershell | Out-File -Encoding utf8 $PROFILE.Replace('profile.ps1','stego.ps1')
+# Then: . path\to\stego.ps1   (or add to $PROFILE)
+
+# bash
+cargo run -p stego-cli -- completions bash > stego.bash
+# source stego.bash  (or install under bash_completion.d)
+
+# zsh / fish
+cargo run -p stego-cli -- completions zsh > _stego
+cargo run -p stego-cli -- completions fish > stego.fish
+```
+
+## JSON output
+
+`plan`, `inspect`, `hide`, and `extract` accept `--json` with a shared shape:
+
+```text
+{"ok":true,"command":"plan|inspect|hide|extract", ...fields...}
+{"ok":false,"command":"…","error":"…"}   # when used by wrappers / FFI
+```
+
+Examples:
+
+```powershell
+cargo run -p stego-cli -- plan --cover .\photo.png --json
+cargo run -p stego-cli -- inspect --input .\out.png --json
+```
 
 ## Contributing
 

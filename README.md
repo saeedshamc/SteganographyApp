@@ -45,6 +45,8 @@ cargo run -p stego-cli -- hide --cover .\doc.pdf --payload .\secret.zip -o .\out
 cargo run -p stego-cli -- extract --input .\out.pdf -o .\recovered.zip
 ```
 
+Shell completions and `--json` schema: see [LEARNING.md](docs/LEARNING.md).
+
 Hide text:
 
 ```powershell
@@ -66,8 +68,9 @@ npm run tauri dev
 |------|------|
 | `crates/stego-core` | Crypto, metadata, Method A/B, detection, hide/extract ops |
 | `crates/stego-cli` | `stego` CLI |
+| `crates/stego-ffi` | C API (`stego_hide` / `stego_extract` / `stego_plan`) for mobile |
 | `apps/desktop` | Tauri 2 GUI |
-| `apps/mobile` | Flutter placeholder (post-desktop) |
+| `apps/mobile` | Flutter + dart:ffi over `stego-ffi` |
 | `docs/` | Open format, crypto, threat model, learning path, **build/installers** |
 
 ## Documentation

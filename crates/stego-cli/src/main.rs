@@ -155,18 +155,32 @@ fn cmd_plan(cover: PathBuf, json: bool) -> Result<(), String> {
     let plan = plan_hide(&bytes, &path_str).map_err(|e| e.to_string())?;
     if json {
         println!(
-            "{{\"cover\":{},\"method\":{},\"capacity_bytes\":{},\"caveat\":{}}}",
-            serde_json_str(&path_str),
-            serde_json_str(plan.method.as_str()),
-            plan
-                .capacity
-                .map(|c| c.to_string())
-                .unwrap_or_else(|| "null".into()),
-            plan
-                .eof_caveat
-                .as_deref()
-                .map(serde_json_str)
-                .unwrap_or_else(|| "null".into())
+            "{}",
+            json_ok(
+                "plan",
+                &[
+                    ("cover", json_str_val(&path_str)),
+                    ("method", json_str_val(plan.method.as_str())),
+                    (
+                        "capacity_bytes",
+                        plan.capacity.map(json_num).unwrap_or_else(json_null),
+                    ),
+                    (
+                        "caveat",
+                        plan.eof_caveat
+                            .as_deref()
+                            .map(json_str_val)
+                            .unwrap_or_else(json_null),
+                    ),
+                    (
+                        "capacity_risk",
+                        plan.capacity_risk
+                            .as_deref()
+                            .map(json_str_val)
+                            .unwrap_or_else(json_null),
+                    ),
+                ],
+            )
         );
         return Ok(());
     }
@@ -185,6 +199,18 @@ fn cmd_plan(cover: PathBuf, json: bool) -> Result<(), String> {
     Ok(())
 }
 
+fn json_ok(command: &str, fields: &[(&str, String)]) -> String {
+    let mut s = format!("{{\"ok\":true,\"command\":{}", serde_json_str(command));
+    for (k, v) in fields {
+        s.push(',');
+        s.push_str(&serde_json_str(k));
+        s.push(':');
+        s.push_str(v);
+    }
+    s.push('}');
+    s
+}
+
 fn serde_json_str(s: &str) -> String {
     let mut out = String::from("\"");
     for ch in s.chars() {
@@ -199,6 +225,18 @@ fn serde_json_str(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+fn json_str_val(s: &str) -> String {
+    serde_json_str(s)
+}
+
+fn json_num(n: impl ToString) -> String {
+    n.to_string()
+}
+
+fn json_null() -> String {
+    "null".into()
 }
 
 fn cmd_inspect(input: PathBuf, json: bool) -> Result<(), String> {
@@ -217,11 +255,16 @@ fn cmd_inspect(input: PathBuf, json: bool) -> Result<(), String> {
     };
     if json {
         println!(
-            "{{\"path\":{},\"size\":{},\"magic_guess\":{},\"plan_method\":{}}}",
-            serde_json_str(&path_str),
-            bytes.len(),
-            serde_json_str(magic),
-            serde_json_str(plan.method.as_str())
+            "{}",
+            json_ok(
+                "inspect",
+                &[
+                    ("path", json_str_val(&path_str)),
+                    ("size", json_num(bytes.len())),
+                    ("magic_guess", json_str_val(magic)),
+                    ("method", json_str_val(plan.method.as_str())),
+                ],
+            )
         );
     } else {
         println!("path: {path_str}");
@@ -392,11 +435,16 @@ fn cmd_hide(
     fs::write(&out_path, &stego).map_err(|e| format!("write output: {e}"))?;
     if json {
         println!(
-            "{{\"ok\":true,\"output\":{},\"bytes\":{},\"method\":{},\"kind\":{}}}",
-            serde_json_str(&out_path.to_string_lossy()),
-            stego.len(),
-            serde_json_str(plan.method.as_str()),
-            serde_json_str(meta.kind().as_str())
+            "{}",
+            json_ok(
+                "hide",
+                &[
+                    ("output", json_str_val(&out_path.to_string_lossy())),
+                    ("bytes", json_num(stego.len())),
+                    ("method", json_str_val(plan.method.as_str())),
+                    ("kind", json_str_val(meta.kind().as_str())),
+                ],
+            )
         );
     } else {
         println!("{}", out_path.display());
@@ -433,9 +481,16 @@ fn cmd_extract(
             .map_err(|_| "payload marked as text but is not valid UTF-8".to_string())?;
         if json {
             println!(
-                "{{\"ok\":true,\"kind\":\"text\",\"method\":{},\"size\":{}}}",
-                serde_json_str(recovered.method.as_str()),
-                text.len()
+                "{}",
+                json_ok(
+                    "extract",
+                    &[
+                        ("kind", json_str_val("text")),
+                        ("method", json_str_val(recovered.method.as_str())),
+                        ("size", json_num(text.len())),
+                        ("output", json_null()),
+                    ],
+                )
             );
             if stdout {
                 eprint!("{text}");
@@ -475,11 +530,16 @@ fn cmd_extract(
     fs::write(&out, &recovered.data).map_err(|e| format!("write output: {e}"))?;
     if json {
         println!(
-            "{{\"ok\":true,\"output\":{},\"kind\":{},\"method\":{},\"size\":{}}}",
-            serde_json_str(&out.to_string_lossy()),
-            serde_json_str(recovered.meta.kind().as_str()),
-            serde_json_str(recovered.method.as_str()),
-            recovered.data.len()
+            "{}",
+            json_ok(
+                "extract",
+                &[
+                    ("output", json_str_val(&out.to_string_lossy())),
+                    ("kind", json_str_val(recovered.meta.kind().as_str())),
+                    ("method", json_str_val(recovered.method.as_str())),
+                    ("size", json_num(recovered.data.len())),
+                ],
+            )
         );
     } else {
         println!("{}", out.display());
