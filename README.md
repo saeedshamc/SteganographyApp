@@ -78,6 +78,10 @@ See **[docs/BUILD.md](docs/BUILD.md)** for:
 - `npm run tauri build` in `apps/desktop` → GUI + NSIS/MSI (Windows) or deb/AppImage (Linux)
 - Prerequisites (MSVC, WebView2, Linux WebKit) and output paths
 
+## Branding
+
+Logo source: [`assets/open-stego-logo.png`](assets/open-stego-logo.png) (also used in the desktop UI as `apps/desktop/src/assets/logo.png`). To regenerate Windows/macOS/Linux app icons from this art, replace files under `apps/desktop/src-tauri/icons/` (see [docs/BUILD.md](docs/BUILD.md)).
+
 ## Ethics
 
 Built for privacy, education, and research. The design is intentionally transparent so others can audit and learn. It is not a guide for malware delivery or abuse.
