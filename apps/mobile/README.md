@@ -1,12 +1,28 @@
 # Open Stego Mobile
 
-Flutter client over `stego-ffi` → `stego-core`.
+Flutter client over `stego-ffi` → `stego-core`. Same encrypted format as desktop/CLI.
 
-```text
-cargo build -p stego-ffi --release
-# place stego_ffi.dll / libstego_ffi.so where the Dart loader can find it
+## Setup
+
+```powershell
+# repo root
+.\scripts\build-mobile-native.ps1
+cd apps\mobile
 flutter pub get
-flutter run   # after `flutter create .` if platform folders are missing
+flutter analyze
+flutter run -d windows
 ```
 
-See [rust/README.md](rust/README.md) for the C API and UX rules.
+Android (after NDK `.so` is built with `-Android`):
+
+```powershell
+flutter run
+```
+
+## Features
+
+- **Hide** — pick cover + payload, password, LSB depth, plan summary, save stego
+- **Extract** — recover text or file; optional Open/Run with confirm (educational)
+- **About** — native bridge status / version
+
+Version tracks workspace semver via `pubspec.yaml` (`0.4.0+40` = 0.4.0, build 40).

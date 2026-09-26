@@ -2,16 +2,30 @@
 
 Native library: workspace crate `crates/stego-ffi` (`cdylib` / `staticlib`).
 
-## Build the shared library
+## Quick build (Windows host)
+
+From the repo root:
 
 ```powershell
-cargo build -p stego-ffi --release
-# Windows: target\release\stego_ffi.dll
-# Linux:   target/release/libstego_ffi.so
-# macOS:   target/release/libstego_ffi.dylib
+.\scripts\build-mobile-native.ps1
+cd apps\mobile
+flutter pub get
+flutter run -d windows
 ```
 
-Copy/link the artifact next to the Flutter runner or set an absolute path in `StegoFfi.load(path)`.
+The script builds `stego-ffi` in release and copies `stego_ffi.dll` into `apps/mobile/native/` so the Windows Flutter runner can install it next to the exe.
+
+## Android (optional NDK)
+
+```powershell
+# requires Android NDK + cargo-ndk
+cargo install cargo-ndk
+.\scripts\build-mobile-native.ps1 -Android
+cd apps\mobile
+flutter run
+```
+
+This places `libstego_ffi.so` under `android/app/src/main/jniLibs/arm64-v8a` (and armeabi-v7a when built).
 
 ## C API
 
@@ -23,12 +37,10 @@ Copy/link the artifact next to the Flutter runner or set an absolute path in `St
 | `stego_extract` | Extract → file or text JSON |
 | `stego_string_free` | Free returned C strings |
 
-Dart bindings: `lib/stego_ffi.dart`. UI: Hide / Extract / About in `lib/main.dart`.
+Dart: `lib/stego_ffi.dart`. UI: Hide / Extract / About in `lib/main.dart`.
 
 ## UX rules (same as desktop)
 
 1. Extract → Save.
-2. Optional Run only after explicit confirm (mobile shows a dialog; does not auto-start).
+2. Optional Open/Run only after explicit confirm(s).
 3. No OS auto-run of cover files in gallery/Photos.
-
-If Flutter SDK is missing, keep editing `lib/` here; run `flutter create .` once to generate platform folders, then `flutter run`.

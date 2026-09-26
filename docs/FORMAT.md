@@ -42,7 +42,7 @@ Output image is always PNG.
 
 ## Semver / format versions
 
-- App crate versions follow workspace `0.3.x` (Phase 3 product polish).
+- App crate versions follow workspace `0.4.x` (Phase 3 product polish).
 - Envelope: `FORMAT_VERSION` 1 (balanced) or 2 (profile/keyfile) — see [CRYPTO.md](CRYPTO.md).
 - Metadata OSMP version remains `1` with additive flag bits.
 - Breaking on-disk changes require a new version byte and a migration note here.

@@ -3,7 +3,7 @@
 Open-source steganography toolkit: hide **encrypted** payloads in almost any cover file, extract them later, and learn exactly how the bits move.
 
 **Desktop (ready):** Rust core + `stego` CLI + Tauri GUI (Windows / Linux).  
-**Mobile (next):** Flutter in [`apps/mobile`](apps/mobile) — same on-disk format after desktop.
+**Mobile (ready):** Flutter in [`apps/mobile`](apps/mobile) over `stego-ffi` — same on-disk format.
 
 ## What it does
 

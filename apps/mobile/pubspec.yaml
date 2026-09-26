@@ -1,7 +1,7 @@
 name: open_stego_mobile
-description: Open Stego Flutter client (Phase F scaffold)
+description: Open Stego Flutter client — same format as desktop/CLI via stego-ffi
 publish_to: "none"
-version: 0.3.8+1
+version: 0.4.0+40
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -11,6 +11,9 @@ dependencies:
     sdk: flutter
   ffi: ^2.1.0
   path: ^1.9.0
+  path_provider: ^2.1.4
+  file_picker: ^8.1.2
+  open_filex: ^4.5.0
 
 dev_dependencies:
   flutter_test:
