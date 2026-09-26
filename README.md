@@ -72,15 +72,28 @@ npm run tauri dev
 
 ## Release builds
 
-See **[docs/BUILD.md](docs/BUILD.md)** for:
+See **[docs/BUILD.md](docs/BUILD.md)** for full details. Short paths:
 
-- `cargo build -p stego-cli --release` → portable `stego` / `stego.exe`
-- `npm run tauri build` in `apps/desktop` → GUI + NSIS/MSI (Windows) or deb/AppImage (Linux)
-- Prerequisites (MSVC, WebView2, Linux WebKit) and output paths
+```powershell
+# Windows: CLI + NSIS/MSI
+.\scripts\build-windows.ps1
+
+# Linux .deb from Windows (Docker Desktop required)
+.\scripts\build-linux-deb-docker.ps1
+```
+
+```bash
+# Linux host: CLI + .deb + AppImage
+chmod +x scripts/build-linux.sh
+./scripts/build-linux.sh
+./scripts/build-linux.sh --deb-only
+```
 
 ## Branding
 
-Logo source: [`assets/open-stego-logo.png`](assets/open-stego-logo.png) (also used in the desktop UI as `apps/desktop/src/assets/logo.png`). To regenerate Windows/macOS/Linux app icons from this art, replace files under `apps/desktop/src-tauri/icons/` (see [docs/BUILD.md](docs/BUILD.md)).
+- Logo: [`assets/open-stego-logo.png`](assets/open-stego-logo.png)
+- Icon master (1024): [`assets/open-stego-icon-1024.png`](assets/open-stego-icon-1024.png)
+- Generated installer/app icons: `apps/desktop/src-tauri/icons/` (`npm run icons` in `apps/desktop`)
 
 ## Ethics
 

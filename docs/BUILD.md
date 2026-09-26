@@ -1,15 +1,17 @@
 # Building executables and installers
 
-This guide covers **release** builds for:
+Release builds for:
 
-1. **CLI** — `stego` / `stego.exe` (portable binary)
-2. **Desktop GUI** — Tauri app **Open Stego**, including platform installers
+1. **CLI** — portable `stego` / `stego.exe`
+2. **Desktop GUI** — **Open Stego** with platform installers
 
-Work from the repository root unless a command says otherwise:
+| Host OS | Typical outputs |
+|---------|-----------------|
+| **Windows** | `stego.exe`, NSIS setup (`.exe`), MSI (`.msi`) |
+| **Linux** | `stego`, **`.deb`**, AppImage |
+| **Windows + Docker** | Linux **`.deb`** (without a Linux machine) |
 
-```text
-D:\Saeed\GitHub\SteganographyApp   (or your clone path)
-```
+App icons are generated from [`assets/open-stego-icon-1024.png`](../assets/open-stego-icon-1024.png) into `apps/desktop/src-tauri/icons/`.
 
 ---
 
@@ -17,13 +19,10 @@ D:\Saeed\GitHub\SteganographyApp   (or your clone path)
 
 ### All platforms
 
-| Tool | Check | Notes |
-|------|--------|--------|
-| Rust stable | `rustc --version` / `cargo --version` | Install via [rustup](https://rustup.rs/) |
-| Node.js LTS | `node --version` / `npm --version` | Needed for the Tauri frontend |
-| Git | `git --version` | Already required to clone |
-
-First-time desktop deps:
+| Tool | Check |
+|------|--------|
+| Rust stable | `rustc --version` / `cargo --version` |
+| Node.js LTS | `node --version` / `npm --version` |
 
 ```powershell
 cd apps\desktop
@@ -31,16 +30,14 @@ npm install
 cd ..\..
 ```
 
-### Windows (GUI + installer)
+### Windows (native GUI / NSIS / MSI)
 
-1. **Visual Studio 2022** with workload **Desktop development with C++**  
-   (MSVC linker, Windows SDK — required by Tauri / Rust on Windows)
-2. **WebView2** — usually preinstalled on Windows 10/11. If the app fails to start, install the [Evergreen Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/).
-3. Optional for NSIS installers: Tauri’s bundler downloads/uses NSIS as needed when you build with the `nsis` target.
+1. Visual Studio 2022 — workload **Desktop development with C++**
+2. WebView2 (usually already on Win10/11)
 
-### Linux (GUI + packages)
+### Linux (native GUI / deb / AppImage)
 
-Install a C toolchain and the usual Tauri/WebKit deps for your distro. Example (Debian/Ubuntu-style):
+Debian/Ubuntu example:
 
 ```bash
 sudo apt update
@@ -52,202 +49,202 @@ sudo apt install -y \
   patchelf
 ```
 
-(Exact package names can vary by distro/version — follow [Tauri Linux prerequisites](https://v2.tauri.app/start/prerequisites/) if something is missing.)
+### Docker (optional — Linux `.deb` from Windows)
+
+- Docker Desktop (Windows) or Docker Engine (Linux)
+- Used by `scripts/build-linux-deb-docker.ps1`
 
 ---
 
-## 1. CLI executable (`stego`)
+## One-command scripts (recommended)
 
-### Build
+### Windows host → Windows CLI + installers
+
+```powershell
+# From repo root
+.\scripts\build-windows.ps1
+```
+
+Options:
+
+```powershell
+.\scripts\build-windows.ps1 -CliOnly
+.\scripts\build-windows.ps1 -GuiOnly
+```
+
+### Linux host → Linux CLI + `.deb` + AppImage
+
+```bash
+chmod +x scripts/build-linux.sh
+./scripts/build-linux.sh
+```
+
+Options:
+
+```bash
+./scripts/build-linux.sh --cli-only
+./scripts/build-linux.sh --gui-only
+./scripts/build-linux.sh --deb-only    # only .deb
+```
+
+### Windows host → Linux `.deb` via Docker
+
+```powershell
+.\scripts\build-linux-deb-docker.ps1
+```
+
+This builds image `openstego-linux-build` from `scripts/Dockerfile.linux-build`, then runs the Linux deb build with your repo mounted.
+
+---
+
+## npm scripts (GUI only)
+
+From `apps/desktop`:
+
+| Script | What it builds |
+|--------|----------------|
+| `npm run build:win` | NSIS + MSI |
+| `npm run build:nsis` | NSIS only |
+| `npm run build:linux` | `.deb` + AppImage |
+| `npm run build:deb` | **`.deb` only** |
+| `npm run build:all` | All configured targets for the current OS |
+| `npm run icons` | Regenerate `src-tauri/icons` from the 1024 master PNG |
+
+Configured targets in `tauri.conf.json`:
+
+```json
+"targets": ["nsis", "msi", "deb", "appimage"]
+```
+
+Tauri only emits packages valid for the **current** OS (e.g. `.deb` is produced on Linux or in the Linux Docker image — not by a bare Windows MSVC toolchain).
+
+---
+
+## CLI only (any OS)
 
 ```powershell
 cargo build -p stego-cli --release
 ```
 
-### Output location
-
-| OS | Path |
-|----|------|
+| OS | Binary |
+|----|--------|
 | Windows | `target\release\stego.exe` |
-| Linux / macOS | `target/release/stego` |
-
-Copy that single file anywhere on `PATH`, or run it by full path. No installer is required for the CLI.
-
-### Smoke test
-
-```powershell
-.\target\release\stego.exe --version
-.\target\release\stego.exe --help
-```
-
-```bash
-./target/release/stego --version
-./target/release/stego --help
-```
-
-### Notes
-
-- Release profile (workspace `Cargo.toml`) uses LTO, `opt-level = 3`, and strip for smaller/faster binaries.
-- Passwords: `--password` or env `STEGO_PASSWORD` (see root `README.md`).
+| Linux | `target/release/stego` |
 
 ---
 
-## 2. Desktop GUI — development vs release
+## Where installers land
 
-### Dev (hot reload, not for distribution)
-
-```powershell
-cd apps\desktop
-npm install
-npm run tauri dev
-```
-
-### Release app + installers
-
-From `apps/desktop`:
-
-```powershell
-cd apps\desktop
-npm install
-npm run tauri build
-```
-
-Equivalent:
-
-```powershell
-npx tauri build
-```
-
-What this does:
-
-1. Runs `npm run build` (TypeScript + Vite → `apps/desktop/dist`)
-2. Compiles the Rust side (`stego-desktop` / `stego-core`) in **release**
-3. Bundles according to `apps/desktop/src-tauri/tauri.conf.json`  
-   (`bundle.active: true`, `targets: "all"`)
-
-### Windows — output artifacts
-
-After a successful build, look under:
-
-```text
-apps\desktop\src-tauri\target\release\bundle\
-```
-
-Typical layout (names may include version `0.1.0`):
-
-| Artifact | Role |
-|----------|------|
-| `nsis\Open Stego_*_x64-setup.exe` | **NSIS installer** — recommended for end users |
-| `msi\Open Stego_*_x64_en-US.msi` | **MSI installer** (if produced for your toolchain) |
-| `../Open Stego.exe` (also under `target\release\`) | Unpackaged GUI binary (portable-ish; still needs WebView2) |
-
-Exact folder names depend on Tauri 2 / target triple. If unsure:
-
-```powershell
-Get-ChildItem -Recurse apps\desktop\src-tauri\target\release\bundle | Select-Object FullName
-```
-
-Also check the workspace target if your Cargo workspace redirects builds:
-
-```powershell
-Get-ChildItem -Recurse target\release\bundle -ErrorAction SilentlyContinue | Select-Object FullName
-Get-ChildItem -Recurse apps\desktop\src-tauri\target\release -Filter "*.exe" | Select-Object FullName
-```
-
-### Linux — output artifacts
+Search both trees (Cargo may use the workspace `target/` or the crate-local one):
 
 ```text
 apps/desktop/src-tauri/target/release/bundle/
+target/release/bundle/
 ```
 
-Common packages when `targets` is `"all"`:
+### Windows
 
-| Artifact | Role |
-|----------|------|
-| `deb/*.deb` | Debian/Ubuntu installer package |
-| `rpm/*.rpm` | RPM-based distros (if tools available) |
-| `appimage/*.AppImage` | Portable AppImage |
+```text
+bundle/nsis/Open Stego_*_x64-setup.exe
+bundle/msi/Open Stego_*_x64_*.msi
+```
 
-Install example (deb):
+### Linux
+
+```text
+bundle/deb/*.deb
+bundle/appimage/*.AppImage
+```
+
+Install `.deb`:
 
 ```bash
-sudo dpkg -i apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+sudo dpkg -i path/to/Open_Stego_*.deb
+# if deps missing:
+sudo apt-get install -f
 ```
 
-### Limit installer formats (optional)
+PowerShell helper to list artifacts after a build:
 
-To build only NSIS on Windows (faster, fewer tools):
+```powershell
+Get-ChildItem -Recurse apps\desktop\src-tauri\target\release\bundle, target\release\bundle `
+  -Include *.exe,*.msi,*.deb,*.AppImage -ErrorAction SilentlyContinue
+```
+
+---
+
+## Regenerating app icons from the logo
+
+Master art:
+
+- UI / brand: `assets/open-stego-logo.png`
+- Icon pipeline (1024×1024, transparent): `assets/open-stego-icon-1024.png`
 
 ```powershell
 cd apps\desktop
-npx tauri build --bundles nsis
+npm run icons
 ```
 
-Other useful values: `msi`, `deb`, `appimage`, `rpm`.
+This refreshes `src-tauri/icons/` (PNG, ICO, ICNS, Store logos, etc.). Commit the updated icons when branding changes.
+
+To rebuild the 1024 master from the logo (Python + Pillow):
+
+```powershell
+python -c "from PIL import Image; print('use repo script or existing open-stego-icon-1024.png')"
+```
+
+(The committed `open-stego-icon-1024.png` is already prepared; re-run the crop/scale step only if you replace the logo.)
 
 ---
 
-## 3. Version and product identity
+## Version / identity
 
-Configured in `apps/desktop/src-tauri/tauri.conf.json`:
+In `apps/desktop/src-tauri/tauri.conf.json`:
 
-| Field | Current value |
-|-------|----------------|
-| `productName` | `Open Stego` |
-| `version` | `0.1.0` |
-| `identifier` | `com.shams.openstego` |
+| Field | Value |
+|-------|--------|
+| `productName` | Open Stego |
+| `version` | 0.1.0 |
+| `identifier` | com.shams.openstego |
 
-Bump `version` there (and ideally keep `apps/desktop/package.json` / workspace crate versions in sync) before cutting a release.
-
-Icons used by the installer/app live in:
-
-```text
-apps/desktop/src-tauri/icons/
-```
+Bump `version` before a public release (keep `apps/desktop/package.json` in sync if you care about npm metadata).
 
 ---
 
-## 4. Recommended release checklist
+## Release checklist
 
 1. `cargo test -p stego-core --lib`
-2. `cargo build -p stego-cli --release` → archive `stego.exe` / `stego`
-3. `cd apps/desktop && npm ci` (or `npm install`)
-4. `npm run tauri build` (or `--bundles nsis` on Windows)
-5. Manually smoke-test: Hide → Extract round-trip on the built app
-6. Attach CLI binary + installer(s) to the GitHub Release
-7. Note WebView2 requirement for Windows GUI in the release notes
+2. Windows: `.\scripts\build-windows.ps1`
+3. Linux `.deb`: on Linux `./scripts/build-linux.sh --deb-only`, **or** on Windows `.\scripts\build-linux-deb-docker.ps1`
+4. Smoke-test Hide → Extract on the installed / portable app
+5. Attach CLI binary + installer(s) to the GitHub Release
+6. Mention WebView2 for Windows GUI in release notes
 
 ---
 
-## 5. Troubleshooting
+## Troubleshooting
 
-| Symptom | What to try |
-|---------|-------------|
-| `link.exe` / MSVC not found | Install VS 2022 **Desktop development with C++** |
-| Tauri build fails on `npm run build` | Run `cd apps/desktop && npm install && npm run build` alone; fix TypeScript errors |
-| App starts then blank window (Windows) | Install/repair WebView2 Evergreen Runtime |
-| Linux: missing `webkit2gtk` | Install distro WebKitGTK dev packages (see Tauri docs) |
-| Cannot find `bundle\` folder | Search both workspace `target\` and `apps\desktop\src-tauri\target\` (Cargo may use either depending on config) |
-| Slow builds | Normal for first release (LTO). Later builds are incremental |
-| Geo-blocked crates / npm | Use a working network/VPN or configured mirrors before `cargo` / `npm` |
+| Symptom | Fix |
+|---------|-----|
+| `link.exe` / MSVC missing | Install VS 2022 **Desktop development with C++** |
+| No `.deb` after `build:win` | Expected — build `.deb` on Linux or with Docker script |
+| Docker script fails | Start Docker Desktop; ensure WSL2 backend works |
+| Linux WebKit errors | Install `libwebkit2gtk-4.1-dev` (see above) |
+| Blank window on Windows | Install/repair WebView2 Evergreen Runtime |
+| Icons look old | `cd apps/desktop && npm run icons`, then rebuild |
 
 ---
 
-## 6. What not to commit
+## Do not commit
 
-Do **not** commit build outputs:
+- `target/`, `apps/desktop/dist/`, `node_modules/`
+- Built `.exe` / `.msi` / `.deb` / `.AppImage` under `bundle/`
 
-- `target/`
-- `apps/desktop/dist/`
-- `apps/desktop/node_modules/`
-- installer `.exe` / `.msi` / `.deb` / `.AppImage` from `bundle/`
-
-Ship those via GitHub Releases (or similar), not the git tree.
+Ship artifacts via GitHub Releases.
 
 ---
 
 ## See also
 
-- Root [README.md](../README.md) — CLI usage examples
-- [LEARNING.md](LEARNING.md) — how the core works
-- [Tauri 2 — Distribute](https://v2.tauri.app/distribute/) — upstream bundler details
+- [README.md](../README.md)
+- [Tauri 2 — Distribute](https://v2.tauri.app/distribute/)

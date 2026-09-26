@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "icons": "tauri icon ../../assets/open-stego-icon-1024.png",
+    "build:win": "tauri build --bundles nsis,msi",
+    "build:linux": "tauri build --bundles deb,appimage",
+    "build:deb": "tauri build --bundles deb",
+    "build:nsis": "tauri build --bundles nsis",
+    "build:all": "tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -15,7 +21,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
-		"vite": "^8.0.16",
+    "vite": "^8.0.16",
     "typescript": "~6.0.3"
   }
 }

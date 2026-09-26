@@ -1,6 +1,6 @@
 # Open Stego — desktop (Tauri)
 
-GUI shell over `stego-core`.
+GUI shell over `stego-core`. Branding icons live in `src-tauri/icons/` (from `assets/open-stego-icon-1024.png`).
 
 ## Develop
 
@@ -9,15 +9,23 @@ npm install
 npm run tauri dev
 ```
 
-## Release executable / installer
+## Release (easy)
 
-See the project guide: **[docs/BUILD.md](../../docs/BUILD.md)**.
+From **repo root** (preferred):
 
-Short version:
+| Goal | Command |
+|------|---------|
+| Windows CLI + NSIS/MSI | `..\..\scripts\build-windows.ps1` or from root `.\scripts\build-windows.ps1` |
+| Linux `.deb` + AppImage | on Linux: `../../scripts/build-linux.sh` |
+| Linux `.deb` from Windows | `.\scripts\build-linux-deb-docker.ps1` (Docker) |
+
+From **this folder**:
 
 ```powershell
-npm install
-npm run tauri build
+npm run build:win      # NSIS + MSI
+npm run build:linux    # deb + AppImage (Linux host)
+npm run build:deb      # deb only (Linux host)
+npm run icons          # regenerate icons from 1024 master
 ```
 
-Installers land under `src-tauri/target/release/bundle/` (or the workspace `target/` tree — details in BUILD.md).
+Full guide: **[docs/BUILD.md](../../docs/BUILD.md)**.

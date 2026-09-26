@@ -1,0 +1,40 @@
+# Build Linux .deb (and AppImage) inside Docker — usable from Windows or Linux hosts.
+# Requires Docker Desktop / Docker Engine.
+#
+# Usage (from repo root):
+#   docker build -f scripts/Dockerfile.linux-build -t openstego-linux-build .
+#   docker run --rm -v "%cd%:/app" -w /app openstego-linux-build ./scripts/build-linux.sh --deb-only
+#
+# PowerShell:
+#   docker build -f scripts/Dockerfile.linux-build -t openstego-linux-build .
+#   docker run --rm -v "${PWD}:/app" -w /app openstego-linux-build ./scripts/build-linux.sh --deb-only
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    wget \
+    file \
+    ca-certificates \
+    pkg-config \
+    libwebkit2gtk-4.1-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev \
+    patchelf \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 22.x
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Rust stable
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+
+WORKDIR /app
+CMD ["./scripts/build-linux.sh", "--deb-only"]
