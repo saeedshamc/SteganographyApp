@@ -7,18 +7,74 @@
     <title>Open Stego</title>
     <script type="module" src="/src/main.ts" defer></script>
   </head>
-
   <body>
-    <main class="container">
-      <h1>Open Stego</h1>
-      <p>Desktop shell — Hide / Extract UI arrives in later stages.</p>
-      <p id="version-msg"></p>
+    <main class="shell">
+      <header class="top">
+        <h1>Open Stego</h1>
+        <p class="tag">Open-source steganography — hide encrypted payloads in any file</p>
+        <p id="version-msg" class="muted"></p>
+      </header>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Ping core</button>
-      </form>
-      <p id="greet-msg"></p>
+      <nav class="tabs" role="tablist">
+        <button type="button" class="tab active" data-tab="hide">Hide</button>
+        <button type="button" class="tab" data-tab="extract" disabled title="Arrives next stage">
+          Extract
+        </button>
+      </nav>
+
+      <section id="panel-hide" class="panel">
+        <h2>Hide</h2>
+
+        <div class="field">
+          <button type="button" id="btn-cover">Choose cover file</button>
+          <p id="cover-path" class="muted">No cover selected</p>
+        </div>
+
+        <div id="plan-box" class="info hidden">
+          <p><strong>Method:</strong> <span id="plan-method"></span></p>
+          <p id="plan-capacity-row" class="hidden">
+            <strong>Capacity:</strong> <span id="plan-capacity"></span>
+          </p>
+          <p id="plan-caveat" class="warn hidden"></p>
+        </div>
+
+        <div class="field">
+          <label class="toggle-row">
+            <input type="radio" name="payload-mode" value="file" checked />
+            Payload file
+          </label>
+          <label class="toggle-row">
+            <input type="radio" name="payload-mode" value="text" />
+            Text / code
+          </label>
+        </div>
+
+        <div id="payload-file-box" class="field">
+          <button type="button" id="btn-payload">Choose payload file</button>
+          <p id="payload-path" class="muted">No payload selected</p>
+        </div>
+
+        <div id="payload-text-box" class="field hidden">
+          <textarea id="payload-text" rows="8" placeholder="Paste text or code to hide…"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" autocomplete="new-password" />
+          <p id="pw-strength" class="strength">Strength: —</p>
+          <p class="muted">Weak passwords are allowed but warned — they are easy to brute-force.</p>
+        </div>
+
+        <label class="toggle-row">
+          <input type="checkbox" id="verify-roundtrip" checked />
+          Verify round-trip before saving
+        </label>
+
+        <div class="actions">
+          <button type="button" id="btn-hide" class="primary" disabled>Hide &amp; save</button>
+        </div>
+        <p id="hide-status" class="status"></p>
+      </section>
     </main>
   </body>
 </html>
