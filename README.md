@@ -3,7 +3,7 @@
 Open-source steganography toolkit: hide **encrypted** payloads in almost any cover file, extract them later, and learn exactly how the bits move.
 
 **Desktop (ready):** Rust core + `stego` CLI + Tauri GUI (Windows / Linux).  
-**Mobile (ready):** Flutter in [`apps/mobile`](apps/mobile) over `stego-ffi` — same on-disk format.
+**Mobile (ready):** Flutter in [`apps/mobile`](apps/mobile) over `stego-ffi` — same on-disk format. Android guide: [docs/ANDROID.md](docs/ANDROID.md).
 
 ## What it does
 
@@ -76,6 +76,7 @@ npm run tauri dev
 ## Documentation
 
 - [BUILD.md](docs/BUILD.md) — **release executables and installers** (CLI + Tauri GUI)
+- [ANDROID.md](docs/ANDROID.md) — **Flutter Android APK / device**
 - [FORMAT.md](docs/FORMAT.md) — binary layout
 - [CRYPTO.md](docs/CRYPTO.md) — Argon2id + AES-256-GCM + key schedule
 - [EMBEDDING.md](docs/EMBEDDING.md) — Method A/B

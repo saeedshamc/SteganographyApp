@@ -59,7 +59,7 @@ class _HomeShellState extends State<HomeShell> {
             padding: const EdgeInsets.only(right: 12),
             child: Center(
               child: Text(
-                'v0.4.0',
+                'v0.4.1',
                 style: Theme.of(context).textTheme.labelMedium,
               ),
             ),
@@ -497,6 +497,15 @@ class AboutPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        Center(
+          child: Image.asset(
+            'assets/branding/logo.png',
+            width: 96,
+            height: 96,
+            filterQuality: FilterQuality.high,
+          ),
+        ),
+        const SizedBox(height: 16),
         Text('Open Stego Mobile', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
         const Text(
@@ -516,8 +525,8 @@ class AboutPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        const Text('Build native lib: cargo build -p stego-ffi --release'),
-        const Text('See apps/mobile/rust/README.md'),
+        const Text('Android build guide: docs/ANDROID.md'),
+        const Text('Native lib: scripts/build-mobile-native.ps1 -Android'),
       ],
     );
   }

@@ -180,45 +180,59 @@ Master art:
 - UI / brand: `assets/open-stego-logo.png`
 - Icon pipeline (1024×1024, transparent): `assets/open-stego-icon-1024.png`
 
+### Regenerating icons (desktop)
+
 ```powershell
 cd apps\desktop
 npm run icons
 ```
 
-This refreshes `src-tauri/icons/` (PNG, ICO, ICNS, Store logos, etc.). Commit the updated icons when branding changes.
+This refreshes `src-tauri/icons/`. For Flutter Android/iOS icons see [ANDROID.md](ANDROID.md).
 
-To rebuild the 1024 master from the logo (Python + Pillow):
-
-```powershell
-python -c "from PIL import Image; print('use repo script or existing open-stego-icon-1024.png')"
-```
-
-(The committed `open-stego-icon-1024.png` is already prepared; re-run the crop/scale step only if you replace the logo.)
+(The committed `open-stego-icon-1024.png` is already prepared; re-run only if you replace the logo.)
 
 ---
 
 ## Version / identity
 
-In `apps/desktop/src-tauri/tauri.conf.json`:
+Workspace version lives in root `Cargo.toml` → `[workspace.package] version`.
 
-| Field | Value |
-|-------|--------|
-| `productName` | Open Stego |
-| `version` | 0.1.0 |
-| `identifier` | com.shams.openstego |
+| Surface | Where | Current line |
+|---------|--------|----------------|
+| Rust crates / CLI / Tauri | workspace + `tauri.conf.json` | `0.4.1` |
+| Desktop npm | `apps/desktop/package.json` | `0.4.1` |
+| Flutter | `apps/mobile/pubspec.yaml` | `0.4.1+41` |
+| Android applicationId | `android/app/build.gradle.kts` | `com.shams.openstego` |
 
-Bump `version` before a public release (keep `apps/desktop/package.json` in sync if you care about npm metadata).
+Bump all of the above together before a public release.
+
+---
+
+## Mobile (Flutter → Android)
+
+Full guide: **[ANDROID.md](ANDROID.md)**.
+
+```powershell
+# NDK + cargo-ndk required (see ANDROID.md)
+.\scripts\build-mobile-native.ps1 -Android
+cd apps\mobile
+flutter pub get
+flutter run
+flutter build apk --release
+```
+
+Launcher icons: from `assets/open-stego-icon-1024.png` via `dart run flutter_launcher_icons` in `apps/mobile`.
 
 ---
 
 ## Release checklist
 
 1. `cargo test -p stego-core --lib`
-2. Windows: `.\scripts\build-windows.ps1`
+2. Windows desktop: `.\scripts\build-windows.ps1`
 3. Linux `.deb`: on Linux `./scripts/build-linux.sh --deb-only`, **or** on Windows `.\scripts\build-linux-deb-docker.ps1`
-4. Smoke-test Hide → Extract on the installed / portable app
-5. Attach CLI binary + installer(s) to the GitHub Release
-6. Mention WebView2 for Windows GUI in release notes
+4. Android: `.\scripts\build-mobile-native.ps1 -Android` then `flutter build apk --release` (see [ANDROID.md](ANDROID.md))
+5. Smoke-test Hide → Extract
+6. Attach CLI + installers + optional APK to the GitHub Release
 
 ---
 
@@ -231,7 +245,9 @@ Bump `version` before a public release (keep `apps/desktop/package.json` in sync
 | Docker script fails | Start Docker Desktop; ensure WSL2 backend works |
 | Linux WebKit errors | Install `libwebkit2gtk-4.1-dev` (see above) |
 | Blank window on Windows | Install/repair WebView2 Evergreen Runtime |
-| Icons look old | `cd apps/desktop && npm run icons`, then rebuild |
+| Icons look old (desktop) | `cd apps/desktop && npm run icons`, then rebuild |
+| Icons look old (Android) | `cd apps/mobile && dart run flutter_launcher_icons`, reinstall app |
+| Android Hide fails / no native | Install NDK + `cargo-ndk`, run `-Android` (see [ANDROID.md](ANDROID.md)) |
 
 ---
 
@@ -239,6 +255,7 @@ Bump `version` before a public release (keep `apps/desktop/package.json` in sync
 
 - `target/`, `apps/desktop/dist/`, `node_modules/`
 - Built `.exe` / `.msi` / `.deb` / `.AppImage` under `bundle/`
+- `apps/mobile/android/.../jniLibs/**/*.so` and `apps/mobile/native/*.dll`
 
 Ship artifacts via GitHub Releases.
 
@@ -247,4 +264,5 @@ Ship artifacts via GitHub Releases.
 ## See also
 
 - [README.md](../README.md)
+- [ANDROID.md](ANDROID.md) — Flutter Android only
 - [Tauri 2 — Distribute](https://v2.tauri.app/distribute/)
