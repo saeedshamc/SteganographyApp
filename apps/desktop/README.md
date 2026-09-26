@@ -1,7 +1,23 @@
-# Tauri + Vanilla TS
+# Open Stego — desktop (Tauri)
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Typescript.
+GUI shell over `stego-core`.
 
-## Recommended IDE Setup
+## Develop
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+```powershell
+npm install
+npm run tauri dev
+```
+
+## Release executable / installer
+
+See the project guide: **[docs/BUILD.md](../../docs/BUILD.md)**.
+
+Short version:
+
+```powershell
+npm install
+npm run tauri build
+```
+
+Installers land under `src-tauri/target/release/bundle/` (or the workspace `target/` tree — details in BUILD.md).

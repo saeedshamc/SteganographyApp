@@ -59,15 +59,24 @@ npm run tauri dev
 | `crates/stego-cli` | `stego` CLI |
 | `apps/desktop` | Tauri 2 GUI |
 | `apps/mobile` | Flutter placeholder (post-desktop) |
-| `docs/` | Open format, crypto, threat model, learning path |
+| `docs/` | Open format, crypto, threat model, learning path, **build/installers** |
 
 ## Documentation
 
+- [BUILD.md](docs/BUILD.md) — **release executables and installers** (CLI + Tauri GUI)
 - [FORMAT.md](docs/FORMAT.md) — binary layout
 - [CRYPTO.md](docs/CRYPTO.md) — Argon2id + AES-256-GCM + key schedule
 - [EMBEDDING.md](docs/EMBEDDING.md) — Method A/B
 - [THREAT_MODEL.md](docs/THREAT_MODEL.md) — what this resists / does not claim
 - [LEARNING.md](docs/LEARNING.md) — how to study the code
+
+## Release builds
+
+See **[docs/BUILD.md](docs/BUILD.md)** for:
+
+- `cargo build -p stego-cli --release` → portable `stego` / `stego.exe`
+- `npm run tauri build` in `apps/desktop` → GUI + NSIS/MSI (Windows) or deb/AppImage (Linux)
+- Prerequisites (MSVC, WebView2, Linux WebKit) and output paths
 
 ## Ethics
 
