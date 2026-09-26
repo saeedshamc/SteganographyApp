@@ -16,9 +16,9 @@ jobs:
         with:
           components: clippy
       - name: Test
-        run: cargo test -p stego-core -p stego-cli
+        run: cargo test -p stego-core -p stego-cli -p stego-ffi
       - name: Clippy
-        run: cargo clippy -p stego-core -p stego-cli -- -D warnings
+        run: cargo clippy -p stego-core -p stego-cli -p stego-ffi -- -D warnings
 
   linux-cli:
     runs-on: ubuntu-latest
@@ -27,16 +27,84 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build release CLI
         run: cargo build -p stego-cli --release
-      - name: Checksum
+      - name: Checksums
         run: |
-          sha256sum target/release/stego > stego-linux-sha256.txt
-          cat stego-linux-sha256.txt
+          sha256sum target/release/stego | tee stego-linux-amd64.sha256
+          cp target/release/stego stego-linux-amd64
       - uses: actions/upload-artifact@v4
         with:
           name: stego-cli-linux
           path: |
-            target/release/stego
-            stego-linux-sha256.txt
+            stego-linux-amd64
+            stego-linux-amd64.sha256
 
-  # NSIS/deb GUI installers: use scripts/build-windows.ps1 and scripts/build-linux*.sh locally
-  # or extend this workflow with platform-specific runners when ready.
+  windows-cli:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build release CLI
+        run: cargo build -p stego-cli --release
+      - name: Checksums
+        shell: pwsh
+        run: |
+          Copy-Item target\release\stego.exe stego-windows-amd64.exe
+          Get-FileHash stego-windows-amd64.exe -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  stego-windows-amd64.exe" } |
+            Tee-Object stego-windows-amd64.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stego-cli-windows
+          path: |
+            stego-windows-amd64.exe
+            stego-windows-amd64.sha256
+
+  # Optional GUI packaging — best-effort; failure should not block CLI artifacts.
+  windows-installer:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Tauri NSIS (best effort)
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          npm ci
+          npm run build:nsis
+      - name: Upload installer if present
+        uses: actions/upload-artifact@v4
+        with:
+          name: stego-gui-windows
+          if-no-files-found: ignore
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/nsis/*
+            apps/desktop/src-tauri/target/release/bundle/msi/*
+
+  release-checksums:
+    if: github.event_name == 'release'
+    needs: [linux-cli, windows-cli]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Build SHA256SUMS
+        run: |
+          find artifacts -type f \( -name '*.sha256' -o -name 'stego-*' \) -print
+          {
+            cat artifacts/stego-cli-linux/stego-linux-amd64.sha256
+            cat artifacts/stego-cli-windows/stego-windows-amd64.sha256
+          } > SHA256SUMS
+          cat SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/stego-cli-linux/stego-linux-amd64
+            artifacts/stego-cli-windows/stego-windows-amd64.exe
+            SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
