@@ -1,16 +1,20 @@
-# Mobile (Flutter) — deferred until desktop is done
-
-This folder reserves the **Flutter** mobile client. Do not delete it.
+# Mobile (Flutter) — Phase F
 
 Desktop (Rust `stego-core` + CLI + Tauri) is the source of truth for the wire format in [`docs/FORMAT.md`](../../docs/FORMAT.md).
 
-## Planned approach (when starting this phase)
-
-1. Keep system Flutter SDK (e.g. `C:\src\flutter`) intact — prepare `flutter doctor` separately.
-2. Create a Flutter app here (`flutter create .` in this directory when ready).
-3. Prefer **FFI** to `stego-core` (same encrypt/embed/extract behavior as desktop), or a thin Dart layer that matches `FORMAT.md` byte-for-byte if FFI is blocked on a target.
-4. Reuse Hide / Extract UX concepts from `apps/desktop` (method badge, capacity, password strength warn, clear errors).
-
 ## Status
 
-**Scaffold only.** Implementation starts after desktop Stage 10.
+**Scaffold reserved.** Core format now includes:
+
+- Executable payload kind (`flags bit1`)
+- KDF profiles + optional keyfile (envelope v1/v2)
+- Adaptive LSB (desktop/CLI)
+
+## When implementing
+
+1. `flutter create .` in this directory (keep system Flutter SDK).
+2. Expose `stego-core` via **FFI** (`cbindgen` / `flutter_rust_bridge`) for `hide_with` / `extract_with`.
+3. Mirror Hide / Extract / Demo UX from `apps/desktop` — Save then optional Run with confirm; no OS auto-run.
+4. Same passwords / keyfiles / profiles as CLI.
+
+See [`docs/PHASE2_PLAN.md`](../../docs/PHASE2_PLAN.md) Phase F.
