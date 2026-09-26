@@ -13,3 +13,4 @@ path = "src/main.rs"
 [dependencies]
 stego-core = { workspace = true }
 clap = { workspace = true }
+clap_complete = { workspace = true }

@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::generate;
 use stego_core::{
     extract_with, hide_with, plan_hide, parse_kdf_profile, CryptoOptions, PayloadMeta,
     StegoOptions, VERSION,
@@ -71,6 +72,12 @@ enum Commands {
         /// Method A: prefer high-variance pixels (lower capacity)
         #[arg(long, default_value_t = false)]
         adaptive_lsb: bool,
+        /// LSB depth 1 or 2 (educational; depth 2 is noisier)
+        #[arg(long, default_value_t = 1)]
+        lsb_depth: u8,
+        /// Machine-readable JSON status line
+        #[arg(long, default_value_t = false)]
+        json: bool,
     },
     /// Extract a hidden payload from a stego file
     Extract {
@@ -98,6 +105,14 @@ enum Commands {
         /// Try adaptive LSB layout first
         #[arg(long, default_value_t = false)]
         adaptive_lsb: bool,
+        #[arg(long, default_value_t = 1)]
+        lsb_depth: u8,
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
+    /// Generate shell completions (bash/zsh/fish/powershell)
+    Completions {
+        shell: clap_complete::Shell,
     },
 }
 
@@ -258,6 +273,7 @@ fn build_opts(
     profile: &str,
     keyfile: Option<PathBuf>,
     adaptive_lsb: bool,
+    lsb_depth: u8,
 ) -> Result<StegoOptions, String> {
     let profile = parse_kdf_profile(profile).map_err(|e| e.to_string())?;
     Ok(StegoOptions {
@@ -266,6 +282,7 @@ fn build_opts(
             keyfile: load_keyfile(keyfile)?,
         },
         adaptive_lsb,
+        lsb_depth,
     })
 }
 
@@ -280,6 +297,8 @@ fn cmd_hide(
     profile: String,
     keyfile: Option<PathBuf>,
     adaptive_lsb: bool,
+    lsb_depth: u8,
+    json: bool,
 ) -> Result<(), String> {
     let cover = normalize_path(&cover);
     let output = normalize_path(&output);
@@ -298,12 +317,17 @@ fn cmd_hide(
     let cover_bytes = fs::read(&cover).map_err(|e| format!("read cover: {e}"))?;
     let cover_str = cover.to_string_lossy().to_string();
     let plan = plan_hide(&cover_bytes, &cover_str).map_err(|e| e.to_string())?;
-    eprintln!("using {}", plan.method.as_str());
-    if let Some(cap) = plan.capacity {
-        eprintln!("capacity: {cap} bytes");
-    }
-    if let Some(c) = &plan.eof_caveat {
-        eprintln!("caveat: {c}");
+    if !json {
+        eprintln!("using {}", plan.method.as_str());
+        if let Some(cap) = plan.capacity {
+            eprintln!("capacity: {cap} bytes");
+        }
+        if let Some(c) = &plan.eof_caveat {
+            eprintln!("caveat: {c}");
+        }
+        if let Some(r) = &plan.capacity_risk {
+            eprintln!("capacity_risk: {r}");
+        }
     }
 
     let (meta, data) = if let Some(p) = payload {
@@ -326,16 +350,18 @@ fn cmd_hide(
         (PayloadMeta::for_text(&data), data)
     };
 
-    let opts = build_opts(&profile, keyfile, adaptive_lsb)?;
-    eprintln!(
-        "kdf: {}{}",
-        opts.crypto.profile.as_str(),
-        if opts.crypto.keyfile.is_some() {
-            " + keyfile"
-        } else {
-            ""
-        }
-    );
+    let opts = build_opts(&profile, keyfile, adaptive_lsb, lsb_depth)?;
+    if !json {
+        eprintln!(
+            "kdf: {}{}",
+            opts.crypto.profile.as_str(),
+            if opts.crypto.keyfile.is_some() {
+                " + keyfile"
+            } else {
+                ""
+            }
+        );
+    }
 
     let password = resolve_password(password)?;
     let (stego, ext) = hide_with(&cover_bytes, &cover_str, &meta, &data, &password, &opts)
@@ -353,7 +379,9 @@ fn cmd_hide(
         if check.data != data {
             return Err("verify failed: payload mismatch".into());
         }
-        eprintln!("verify: ok");
+        if !json {
+            eprintln!("verify: ok");
+        }
     }
 
     if let Some(parent) = out_path.parent() {
@@ -362,8 +390,18 @@ fn cmd_hide(
         }
     }
     fs::write(&out_path, &stego).map_err(|e| format!("write output: {e}"))?;
-    println!("{}", out_path.display());
-    eprintln!("wrote {} bytes", stego.len());
+    if json {
+        println!(
+            "{{\"ok\":true,\"output\":{},\"bytes\":{},\"method\":{},\"kind\":{}}}",
+            serde_json_str(&out_path.to_string_lossy()),
+            stego.len(),
+            serde_json_str(plan.method.as_str()),
+            serde_json_str(meta.kind().as_str())
+        );
+    } else {
+        println!("{}", out_path.display());
+        eprintln!("wrote {} bytes", stego.len());
+    }
     Ok(())
 }
 
@@ -376,20 +414,33 @@ fn cmd_extract(
     i_understand: bool,
     keyfile: Option<PathBuf>,
     adaptive_lsb: bool,
+    lsb_depth: u8,
+    json: bool,
 ) -> Result<(), String> {
     let input = normalize_path(&input);
     let stego = fs::read(&input).map_err(|e| format!("read input: {e}"))?;
     let password = resolve_password(password)?;
-    let opts = build_opts("balanced", keyfile, adaptive_lsb)?;
+    let opts = build_opts("balanced", keyfile, adaptive_lsb, lsb_depth)?;
     let recovered = extract_with(&stego, &input.to_string_lossy(), &password, &opts)
         .map_err(|e| e.to_string())?;
 
-    eprintln!("method: {}", recovered.method.as_str());
-    eprintln!("kind: {}", recovered.meta.kind().as_str());
+    if !json {
+        eprintln!("method: {}", recovered.method.as_str());
+        eprintln!("kind: {}", recovered.meta.kind().as_str());
+    }
     if recovered.meta.is_text {
         let text = String::from_utf8(recovered.data)
             .map_err(|_| "payload marked as text but is not valid UTF-8".to_string())?;
-        if stdout || output.is_none() {
+        if json {
+            println!(
+                "{{\"ok\":true,\"kind\":\"text\",\"method\":{},\"size\":{}}}",
+                serde_json_str(recovered.method.as_str()),
+                text.len()
+            );
+            if stdout {
+                eprint!("{text}");
+            }
+        } else if stdout || output.is_none() {
             print!("{text}");
             if !text.ends_with('\n') {
                 println!();
@@ -422,7 +473,17 @@ fn cmd_extract(
         }
     }
     fs::write(&out, &recovered.data).map_err(|e| format!("write output: {e}"))?;
-    println!("{}", out.display());
+    if json {
+        println!(
+            "{{\"ok\":true,\"output\":{},\"kind\":{},\"method\":{},\"size\":{}}}",
+            serde_json_str(&out.to_string_lossy()),
+            serde_json_str(recovered.meta.kind().as_str()),
+            serde_json_str(recovered.method.as_str()),
+            recovered.data.len()
+        );
+    } else {
+        println!("{}", out.display());
+    }
 
     if run {
         if !i_understand {
@@ -444,7 +505,7 @@ fn cmd_extract(
         if !status.success() {
             return Err(format!("process exited with {status}"));
         }
-    } else if recovered.meta.is_executable {
+    } else if recovered.meta.is_executable && !json {
         eprintln!("hint: executable payload saved; to run it use --run --i-understand");
     }
     Ok(())
@@ -457,6 +518,11 @@ fn main() -> ExitCode {
         Commands::Inspect { input, json } => cmd_inspect(input, json),
         Commands::Doctor => cmd_doctor(),
         Commands::Bench => cmd_bench(),
+        Commands::Completions { shell } => {
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "stego", &mut io::stdout());
+            Ok(())
+        }
         Commands::Hide {
             cover,
             payload,
@@ -468,6 +534,8 @@ fn main() -> ExitCode {
             profile,
             keyfile,
             adaptive_lsb,
+            lsb_depth,
+            json,
         } => cmd_hide(
             cover,
             payload,
@@ -479,6 +547,8 @@ fn main() -> ExitCode {
             profile,
             keyfile,
             adaptive_lsb,
+            lsb_depth,
+            json,
         ),
         Commands::Extract {
             input,
@@ -489,6 +559,8 @@ fn main() -> ExitCode {
             i_understand,
             keyfile,
             adaptive_lsb,
+            lsb_depth,
+            json,
         } => cmd_extract(
             input,
             output,
@@ -498,6 +570,8 @@ fn main() -> ExitCode {
             i_understand,
             keyfile,
             adaptive_lsb,
+            lsb_depth,
+            json,
         ),
     };
     match result {
